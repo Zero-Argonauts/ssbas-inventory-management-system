@@ -97,7 +97,7 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              ${stats.totalValue.toLocaleString()}
+              ₹{stats.totalValue.toLocaleString()}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               Combined asset value
@@ -185,10 +185,10 @@ export function Dashboard() {
                     condition === "Excellent"
                       ? "bg-green-500"
                       : condition === "Good"
-                      ? "bg-blue-500"
-                      : condition === "Fair"
-                      ? "bg-yellow-500"
-                      : "bg-red-500";
+                        ? "bg-blue-500"
+                        : condition === "Fair"
+                          ? "bg-yellow-500"
+                          : "bg-red-500";
 
                   return (
                     <div key={condition} className="flex items-center justify-between">

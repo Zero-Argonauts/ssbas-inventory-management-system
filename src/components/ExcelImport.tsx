@@ -4,7 +4,7 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Alert, AlertDescription } from "./ui/alert";
-import { Upload, FileSpreadsheet, CheckCircle, AlertCircle } from "lucide-react";
+import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, Sheet } from "lucide-react";
 import { toast } from "sonner";
 import { projectId, publicAnonKey } from "../utils/supabase/info";
 import * as XLSX from "xlsx";
@@ -15,31 +15,125 @@ interface ImportResult {
   errors: Array<{ asset: any; error: string }>;
 }
 
+interface SheetData {
+  name: string;
+  data: any[];
+  assetTaggingColumn: string | null;
+  totalRows: number;
+  validRows: number;
+}
+
 export function ExcelImport() {
   const [file, setFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
-  const [preview, setPreview] = useState<any[]>([]);
+  const [preview, setPreview] = useState<SheetData[]>([]);
+  const [selectedSheets, setSelectedSheets] = useState<string[]>([]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
       setFile(selectedFile);
       setResult(null);
+      setSelectedSheets([]);
       parseExcelFile(selectedFile);
     }
+  };
+
+  const findDataStartRow = (sheet: XLSX.WorkSheet): number => {
+    const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1');
+    
+    // Look for the first row that looks like headers (contains text in multiple columns)
+    for (let row = range.s.r; row <= Math.min(range.s.r + 20, range.e.r); row++) {
+      let textColumns = 0;
+      for (let col = range.s.c; col <= range.e.c; col++) {
+        const cellAddress = XLSX.utils.encode_cell({ r: row, c: col });
+        const cell = sheet[cellAddress];
+        if (cell && cell.v && typeof cell.v === 'string' && cell.v.trim() !== '') {
+          textColumns++;
+        }
+      }
+      // If we find a row with 3+ text columns, it's likely the header row
+      if (textColumns >= 3) {
+        return row;
+      }
+    }
+    
+    // Fallback: return the first row
+    return range.s.r;
   };
 
   const parseExcelFile = async (file: File) => {
     try {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data, { type: "array" });
-      const sheetName = workbook.SheetNames[0];
-      const sheet = workbook.Sheets[sheetName];
-      const jsonData = XLSX.utils.sheet_to_json(sheet);
+      const sheetData: SheetData[] = [];
 
-      // Show preview of first 5 rows
-      setPreview(jsonData.slice(0, 5));
+      for (const sheetName of workbook.SheetNames) {
+        const sheet = workbook.Sheets[sheetName];
+        
+        // Find the data start row
+        const dataStartRow = findDataStartRow(sheet);
+        
+        // Get all data from the sheet
+        const allData = XLSX.utils.sheet_to_json(sheet, { 
+          header: 1,
+          range: dataStartRow,
+          defval: null
+        });
+
+        if (allData.length === 0) {
+          continue;
+        }
+
+        // First row should be headers
+        const headers = allData[0] as string[];
+        
+        // Clean headers (remove null/undefined values)
+        const cleanHeaders = headers.filter(header => header && header.toString().trim() !== '');
+        
+        if (cleanHeaders.length === 0) {
+          console.warn(`Sheet "${sheetName}" has no valid headers`);
+          continue;
+        }
+
+        // Process data rows (skip header)
+        const dataRows = allData.slice(1);
+        
+        // Filter out completely empty rows
+        const validRows = dataRows.filter(row => {
+          return row.some(cell => cell !== null && cell !== undefined && cell.toString().trim() !== '');
+        });
+
+        // Convert to objects with proper headers
+        const jsonData = dataRows.map((row: any[]) => {
+          const obj: any = {};
+          headers.forEach((header, index) => {
+            if (header && header.toString().trim() !== '') {
+              obj[header] = row[index];
+            }
+          });
+          return obj;
+        });
+
+        sheetData.push({
+          name: sheetName,
+          data: jsonData,
+          assetTaggingColumn: null, // No longer required
+          totalRows: dataRows.length,
+          validRows: validRows.length
+        });
+      }
+
+      if (sheetData.length === 0) {
+        toast.error("No valid sheets found in the Excel file");
+        return;
+      }
+
+      setPreview(sheetData);
+      setSelectedSheets(sheetData.map(s => s.name));
+      
+      toast.success(`Found ${sheetData.length} sheet(s) with data`);
     } catch (error) {
       console.error("Error parsing Excel file:", error);
       toast.error("Failed to parse Excel file");
@@ -47,66 +141,37 @@ export function ExcelImport() {
   };
 
   const normalizeAssetData = (row: any): any => {
-    // Map various possible column names to our standard format
-    const mapping: Record<string, string[]> = {
-      // Core Identification - prioritize assetTagging
-      assetTagging: ["assetTagging", "asset_tagging", "assetCode", "asset_code", "code", "tag", "asset_tag", "Asset Tagging", "Asset Code", "Asset Tag"],
-      assetClass: ["assetClass", "asset_class", "class", "Class", "Asset Class"],
-      assetSubClass: ["assetSubClass", "asset_sub_class", "sub_class", "subClass", "Sub Class", "Asset Sub-Class"],
-      description: ["description", "assetName", "asset_name", "name", "Description", "Asset Name", "Name"],
-      serialNumber: ["serialNumber", "serial_number", "serial", "Serial Number", "Serial"],
-      
-      // Purchase & Vendor Information
-      dateOfPurchase: ["dateOfPurchase", "date_of_purchase", "purchaseDate", "purchase_date", "date", "Date of Purchase", "Purchase Date"],
-      taxInvoiceNo: ["taxInvoiceNo", "tax_invoice_no", "invoice_no", "invoice", "Tax Invoice No.", "Invoice No."],
-      supplierVendor: ["supplierVendor", "supplier_vendor", "supplier", "vendor", "Supplier/Vendor", "Supplier", "Vendor"],
-      
-      // Financial Information
-      originalCost: ["originalCost", "original_cost", "cost", "price", "value", "amount", "Original Cost", "Cost", "Price", "Value"],
-      depreciationRate: ["depreciationRate", "depreciation_rate", "depreciation", "Depreciation Rate"],
-      wdvAs31stMarch2022: ["wdvAs31stMarch2022", "wdv_as_31st_march_2022", "wdv", "WDV as 31st March 2022"],
-      
-      // Current Status
-      location: ["location", "Location"],
-      department: ["department", "dept", "Department"],
-      condition: ["condition", "Condition"],
-      status: ["status", "Status"],
-      
-      // Additional Tracking
-      transferDisposalDetails: ["transferDisposalDetails", "transfer_disposal_details", "transfer_details", "Transfer/Disposal Details"],
-      valuationAtTransferDisposal: ["valuationAtTransferDisposal", "valuation_at_transfer_disposal", "valuation", "Valuation at Transfer/Disposal"],
-      scrapValueRealised: ["scrapValueRealised", "scrap_value_realised", "scrap_value", "Scrap Value Realised"],
-      scrapRecord: ["scrapRecord", "scrap_record", "scrap", "Scrap Record"],
-      remarksAuthorisedSignatory: ["remarksAuthorisedSignatory", "remarks_authorised_signatory", "remarks", "Remarks & Authorised Signatory"],
-      
-      // Legacy fields for backward compatibility
-      assetCode: ["assetCode", "asset_code", "code", "tag", "asset_tag", "Asset Code", "Asset Tag"],
-      assetName: ["assetName", "asset_name", "name", "description", "Asset Name", "Name"],
-      category: ["category", "type", "Category", "Type"],
-      supplier: ["supplier", "vendor", "Supplier", "Vendor"],
-      purchaseDate: ["purchaseDate", "purchase_date", "date", "Purchase Date"],
-      cost: ["cost", "price", "value", "amount", "Cost", "Price", "Value"],
-      warrantyExpiry: ["warrantyExpiry", "warranty_expiry", "warranty", "Warranty Expiry"],
-      notes: ["notes", "remarks", "comments", "Notes", "Remarks"],
-    };
-
+    // Use the actual field titles from the Excel sheet
+    // Clean and normalize the data while preserving original field names
     const normalized: any = {};
 
-    for (const [key, possibleNames] of Object.entries(mapping)) {
-      for (const name of possibleNames) {
-        if (row[name] !== undefined && row[name] !== null && row[name] !== "") {
-          normalized[key] = String(row[name]);
-          break;
+    for (const [key, value] of Object.entries(row)) {
+      if (value !== null && value !== undefined && value.toString().trim() !== '') {
+        // Clean up the value
+        let cleanValue = value.toString().trim();
+        
+        // Clean up cost values (remove commas)
+        if (typeof cleanValue === 'string' && /^[\d,]+\.?\d*$/.test(cleanValue)) {
+          cleanValue = cleanValue.replace(/,/g, '');
         }
+        
+        normalized[key] = cleanValue;
       }
     }
-
 
     return normalized;
   };
 
+  const handleSheetToggle = (sheetName: string) => {
+    setSelectedSheets(prev => 
+      prev.includes(sheetName) 
+        ? prev.filter(name => name !== sheetName)
+        : [...prev, sheetName]
+    );
+  };
+
   const handleImport = async () => {
-    if (!file) return;
+    if (!file || selectedSheets.length === 0) return;
 
     setImporting(true);
     setResult(null);
@@ -114,12 +179,58 @@ export function ExcelImport() {
     try {
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data, { type: "array" });
-      const sheetName = workbook.SheetNames[0];
-      const sheet = workbook.Sheets[sheetName];
-      const jsonData: any[] = XLSX.utils.sheet_to_json(sheet);
+      const allAssets: any[] = [];
 
-      // Normalize and prepare asset data
-      const assets = jsonData.map((row) => normalizeAssetData(row));
+      // Process only selected sheets
+      for (const sheetName of selectedSheets) {
+        const sheet = workbook.Sheets[sheetName];
+        const dataStartRow = findDataStartRow(sheet);
+        
+        const allData = XLSX.utils.sheet_to_json(sheet, { 
+          header: 1,
+          range: dataStartRow,
+          defval: null
+        });
+
+        if (allData.length === 0) continue;
+
+        const headers = allData[0] as string[];
+        
+        // Clean headers (remove null/undefined values)
+        const cleanHeaders = headers.filter(header => header && header.toString().trim() !== '');
+        
+        if (cleanHeaders.length === 0) continue;
+
+        // Process data rows (skip header)
+        const dataRows = allData.slice(1);
+        
+        // Convert to objects with proper headers
+        const jsonData = dataRows.map((row: any[]) => {
+          const obj: any = {};
+          headers.forEach((header, index) => {
+            if (header && header.toString().trim() !== '') {
+              obj[header] = row[index];
+            }
+          });
+          return obj;
+        });
+
+        // Filter out completely empty rows
+        const validAssets = jsonData
+          .filter(row => {
+            return Object.values(row).some(value => 
+              value !== null && value !== undefined && value.toString().trim() !== ''
+            );
+          })
+          .map(row => normalizeAssetData(row));
+
+        allAssets.push(...validAssets);
+      }
+
+      if (allAssets.length === 0) {
+        toast.error("No valid assets found in selected sheets");
+        return;
+      }
 
       // Send to server
       const response = await fetch(
@@ -130,7 +241,7 @@ export function ExcelImport() {
             "Content-Type": "application/json",
             Authorization: `Bearer ${publicAnonKey}`,
           },
-          body: JSON.stringify({ assets }),
+          body: JSON.stringify({ assets: allAssets }),
         }
       );
 
@@ -141,7 +252,7 @@ export function ExcelImport() {
       }
 
       setResult(responseData.results);
-      toast.success(responseData.message);
+      toast.success(`Successfully imported ${allAssets.length} assets from ${selectedSheets.length} sheet(s)`);
     } catch (error: any) {
       console.error("Error importing assets:", error);
       toast.error(error.message || "Failed to import assets");
@@ -156,7 +267,7 @@ export function ExcelImport() {
         <CardHeader>
           <CardTitle>Import Assets from Excel</CardTitle>
           <CardDescription>
-            Upload an Excel file (.xlsx or .xls) containing your asset data
+            Upload an Excel file (.xlsx or .xls) containing your asset data across multiple sheets
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -173,7 +284,7 @@ export function ExcelImport() {
               />
               <Button
                 onClick={handleImport}
-                disabled={!file || importing}
+                disabled={!file || importing || selectedSheets.length === 0}
                 className="min-w-[120px]"
               >
                 <Upload className="h-4 w-4 mr-2" />
@@ -188,57 +299,97 @@ export function ExcelImport() {
             <AlertDescription>
               <div className="space-y-2">
                 <p>
-                  Your Excel file should contain columns for asset information. The following
-                  column names are recognized (case-insensitive):
+                  Your Excel file should contain columns for asset information. The system will use the actual column names from your Excel sheets.
+                  Common asset information includes:
                 </p>
                 <ul className="list-disc list-inside space-y-1 text-sm">
                   <li>
-                    <strong>Asset Tagging/Code</strong> (required) - Unique identifier (e.g., SSBAS/M-EVS/25-26/01)
+                    <strong>Asset Identification:</strong> Asset Tag, Asset Code, Serial Number, etc.
                   </li>
                   <li>
-                    <strong>Description</strong> (required) - Detailed asset description
+                    <strong>Description:</strong> Asset Name, Description, Details
                   </li>
                   <li>
-                    <strong>Department</strong> (required) - Department name
+                    <strong>Location:</strong> Department, Location, Building, Room
                   </li>
-                  <li><strong>Core Fields:</strong> Asset Class, Asset Sub-Class, Serial Number</li>
-                  <li><strong>Purchase Info:</strong> Date of Purchase, Tax Invoice No., Supplier/Vendor</li>
-                  <li><strong>Financial:</strong> Original Cost, Depreciation Rate, WDV as 31st March 2022</li>
-                  <li><strong>Status:</strong> Location, Condition, Status</li>
-                  <li><strong>Tracking:</strong> Transfer/Disposal Details, Scrap Value, Remarks</li>
+                  <li><strong>Purchase Info:</strong> Date of Purchase, Invoice No., Supplier/Vendor</li>
+                  <li><strong>Financial:</strong> Cost, Price, Value, Depreciation</li>
+                  <li><strong>Status:</strong> Condition, Status, Maintenance</li>
+                  <li><strong>Additional:</strong> Any other relevant asset information</li>
                 </ul>
               </div>
             </AlertDescription>
           </Alert>
 
-          {/* Preview */}
+          {/* Sheet Selection */}
           {preview.length > 0 && (
-            <div className="space-y-2">
-              <Label>Preview (First 5 rows)</Label>
-              <div className="border rounded-lg overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted">
-                    <tr>
-                      {Object.keys(preview[0]).map((key) => (
-                        <th key={key} className="px-4 py-2 text-left">
-                          {key}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {preview.map((row, idx) => (
-                      <tr key={idx} className="border-t">
-                        {Object.values(row).map((value: any, vidx) => (
-                          <td key={vidx} className="px-4 py-2">
-                            {String(value)}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            <div className="space-y-4">
+              <Label>Select Sheets to Import</Label>
+              <div className="grid gap-3">
+                {preview.map((sheet) => (
+                  <div key={sheet.name} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <Sheet className="h-5 w-5 text-muted-foreground" />
+                      <div>
+                        <div className="font-medium">{sheet.name}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {sheet.validRows} valid rows out of {sheet.totalRows} total rows
+                          <span className="ml-2 text-green-600">
+                            ✓ Ready to import
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <Button
+                      variant={selectedSheets.includes(sheet.name) ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => handleSheetToggle(sheet.name)}
+                    >
+                      {selectedSheets.includes(sheet.name) ? "Selected" : "Select"}
+                    </Button>
+                  </div>
+                ))}
               </div>
+            </div>
+          )}
+
+          {/* Preview */}
+          {preview.length > 0 && selectedSheets.length > 0 && (
+            <div className="space-y-4">
+              <Label>Preview (First 3 rows from selected sheets)</Label>
+              {preview
+                .filter(sheet => selectedSheets.includes(sheet.name))
+                .map((sheet) => (
+                  <div key={sheet.name} className="space-y-2">
+                    <h4 className="font-medium text-sm text-muted-foreground">
+                      Sheet: {sheet.name}
+                    </h4>
+                    <div className="border rounded-lg overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted">
+                          <tr>
+                            {Object.keys(sheet.data[0] || {}).map((key) => (
+                              <th key={key} className="px-4 py-2 text-left">
+                                {key}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sheet.data.slice(0, 3).map((row, idx) => (
+                            <tr key={idx} className="border-t">
+                              {Object.values(row).map((value: any, vidx) => (
+                                <td key={vidx} className="px-4 py-2">
+                                  {String(value || '')}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
             </div>
           )}
         </CardContent>
