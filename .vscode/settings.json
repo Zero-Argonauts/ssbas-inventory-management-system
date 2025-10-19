@@ -1,6 +1,0 @@
-{
-  "typescript.preferences.exclude": [
-    "src/supabase/functions/**/*"
-  ],
-  "typescript.validate.enable": false
-}

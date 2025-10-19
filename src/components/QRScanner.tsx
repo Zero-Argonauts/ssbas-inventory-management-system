@@ -1,28 +1,29 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
-import { Badge } from "./ui/badge";
 import { Camera, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { projectId, publicAnonKey } from "../utils/supabase/info";
 import { Html5Qrcode } from "html5-qrcode";
 
 interface Asset {
-  assetCode: string;
-  assetName: string;
-  department: string;
-  category: string;
-  supplier: string;
-  purchaseDate: string;
-  cost: string;
-  condition: string;
-  status: string;
+  assetTagging: string;
+  assetClass: string;
+  assetSubClass: string;
+  description: string;
+  dateOfPurchase: string;
+  taxInvoice: string;
+  vendorsSuppliers: string;
   location: string;
-  serialNumber: string;
-  warrantyExpiry: string;
-  notes: string;
+  originalCost: string;
+  depreciationRate: string;
+  wdvMarch2022: string;
+  transferredDisposalDetails: string;
+  valuationAtTransfer: string;
+  scrapValueRealised: string;
+  remarks: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -40,8 +41,10 @@ export function QRScanner() {
     setAsset(null);
 
     try {
+      // URL-encode the asset code to handle special characters like slashes
+      const encodedCode = encodeURIComponent(code);
       const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8862d32b/assets/${code}`,
+        `https://${projectId}.supabase.co/functions/v1/make-server-8862d32b/assets/${encodedCode}`,
         {
           headers: {
             Authorization: `Bearer ${publicAnonKey}`,
@@ -85,7 +88,7 @@ export function QRScanner() {
           fetchAsset(decodedText);
           stopScanning();
         },
-        (errorMessage) => {
+        (_errorMessage) => {
           // Scanning in progress, errors here are normal
         }
       );
@@ -125,43 +128,13 @@ export function QRScanner() {
     };
   }, []);
 
-  const getConditionColor = (condition: string) => {
-    switch (condition) {
-      case "Excellent":
-        return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
-      case "Good":
-        return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200";
-      case "Fair":
-        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200";
-      case "Poor":
-        return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200";
-      default:
-        return "";
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "Active":
-        return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
-      case "Inactive":
-        return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200";
-      case "Under Repair":
-        return "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200";
-      case "Retired":
-        return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200";
-      default:
-        return "";
-    }
-  };
-
   return (
     <div className="p-6 space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>Scan QR Code</CardTitle>
           <CardDescription>
-            Scan an asset QR code or manually enter the asset code to view details
+            Scan an asset QR code or manually enter the asset tagging code to view details
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -197,10 +170,10 @@ export function QRScanner() {
 
           {/* Manual Entry */}
           <div className="space-y-4 pt-4 border-t">
-            <Label>Manual Asset Code Entry</Label>
+            <Label>Manual Asset Tagging Entry</Label>
             <div className="flex gap-2">
               <Input
-                placeholder="Enter asset code (e.g., AST-001)"
+                placeholder="Enter asset tagging (e.g., /3B-26/01)"
                 value={manualCode}
                 onChange={(e) => setManualCode(e.target.value)}
                 onKeyDown={(e) => {
@@ -231,69 +204,73 @@ export function QRScanner() {
         <Card>
           <CardHeader>
             <CardTitle>Asset Information</CardTitle>
-            <CardDescription>Details for {asset.assetCode}</CardDescription>
+            <CardDescription>Details for {asset.assetTagging}</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-6">
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <div className="text-sm text-muted-foreground">Asset Code</div>
-                  <div>{asset.assetCode}</div>
+                  <div className="text-sm text-muted-foreground">Asset Tagging</div>
+                  <div>{asset.assetTagging}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-muted-foreground">Asset Name</div>
-                  <div>{asset.assetName}</div>
+                  <div className="text-sm text-muted-foreground">Asset Class</div>
+                  <div>{asset.assetClass || 'N/A'}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-muted-foreground">Department</div>
-                  <div>{asset.department}</div>
+                  <div className="text-sm text-muted-foreground">Asset Sub Class</div>
+                  <div>{asset.assetSubClass || 'N/A'}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-muted-foreground">Category</div>
-                  <div>{asset.category}</div>
+                  <div className="text-sm text-muted-foreground">Description</div>
+                  <div>{asset.description || 'N/A'}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-muted-foreground">Supplier</div>
-                  <div>{asset.supplier || "N/A"}</div>
+                  <div className="text-sm text-muted-foreground">Date of Purchase</div>
+                  <div>{asset.dateOfPurchase || 'N/A'}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-muted-foreground">Purchase Date</div>
-                  <div>{asset.purchaseDate || "N/A"}</div>
+                  <div className="text-sm text-muted-foreground">Tax Invoice</div>
+                  <div>{asset.taxInvoice || 'N/A'}</div>
                 </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">Cost</div>
-                  <div>${parseFloat(asset.cost || "0").toLocaleString()}</div>
-                </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">Condition</div>
-                  <Badge className={getConditionColor(asset.condition)} variant="secondary">
-                    {asset.condition}
-                  </Badge>
-                </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">Status</div>
-                  <Badge className={getStatusColor(asset.status)} variant="secondary">
-                    {asset.status}
-                  </Badge>
+                <div className="col-span-2">
+                  <div className="text-sm text-muted-foreground">Vendors/Suppliers Name & Address</div>
+                  <div>{asset.vendorsSuppliers || 'N/A'}</div>
                 </div>
                 <div>
                   <div className="text-sm text-muted-foreground">Location</div>
-                  <div>{asset.location || "N/A"}</div>
+                  <div>{asset.location || 'N/A'}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-muted-foreground">Serial Number</div>
-                  <div>{asset.serialNumber || "N/A"}</div>
+                  <div className="text-sm text-muted-foreground">Original Cost</div>
+                  <div>₹{parseFloat(asset.originalCost || "0").toLocaleString('en-IN')}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-muted-foreground">Warranty Expiry</div>
-                  <div>{asset.warrantyExpiry || "N/A"}</div>
+                  <div className="text-sm text-muted-foreground">Depreciation Rate</div>
+                  <div>{asset.depreciationRate ? `${asset.depreciationRate}%` : 'N/A'}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">WDV as 31st March 2022</div>
+                  <div>₹{parseFloat(asset.wdvMarch2022 || "0").toLocaleString('en-IN')}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">Transferred/Disposal Details</div>
+                  <div>{asset.transferredDisposalDetails || 'N/A'}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">Valuation at Transfer/Disposal</div>
+                  <div>{asset.valuationAtTransfer ? `₹${parseFloat(asset.valuationAtTransfer).toLocaleString('en-IN')}` : 'N/A'}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">Scrap Value Realised</div>
+                  <div>{asset.scrapValueRealised ? `₹${parseFloat(asset.scrapValueRealised).toLocaleString('en-IN')}` : 'N/A'}</div>
                 </div>
               </div>
 
-              {asset.notes && (
+              {asset.remarks && (
                 <div>
-                  <div className="text-sm text-muted-foreground mb-2">Notes</div>
-                  <div className="p-4 bg-muted rounded-lg">{asset.notes}</div>
+                  <div className="text-sm text-muted-foreground mb-2">Remarks & Authorised Signatory</div>
+                  <div className="p-4 bg-muted rounded-lg">{asset.remarks}</div>
                 </div>
               )}
 

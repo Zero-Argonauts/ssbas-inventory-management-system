@@ -33,54 +33,30 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "./ui/alert-dialog";
-import { Badge } from "./ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import { Search, Filter, Edit, Trash2, Eye, QrCode, Download } from "lucide-react";
+import { Search, Edit, Trash2, Eye, QrCode, Download, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { projectId, publicAnonKey } from "../utils/supabase/info";
 import { AssetForm } from "./AssetForm";
 import QRCodeLib from "qrcode";
+import { jsPDF } from "jspdf";
 
 interface Asset {
-  // Core Identification
-  assetTagging: string; // Asset Tag / Code → Asset Tagging (e.g., SSBAS/M-EVS/25-26/01)
-  assetClass: string; // Asset Class / (BLOCK No as per IT) (e.g., Machine, HP)
-  assetSubClass: string; // Asset Sub-Class (e.g., Laboratory oven, Monitor, CPU)
-  description: string; // Description (detailed asset description)
-  serialNumber: string; // Serial No (manufacturer serial number)
-  
-  // Purchase & Vendor Information
-  dateOfPurchase: string; // Date of Purchase
-  taxInvoiceNo: string; // Tax Invoice No./(File no.)
-  supplierVendor: string; // Vendors/ Suppliers Name & Address
-  
-  // Financial Information
-  originalCost: string; // Cost / Value ($) → Original Cost
-  depreciationRate: string; // Depreciation Rate
-  wdvAs31stMarch2022: string; // WDV as 31st March 2022 (Written Down Value)
-  
-  // Current Status
-  location: string; // Location (e.g., Environmental Science Lab, IT LAB III)
-  department: string; // Department (from Excel: Environmental Science, IT, etc.)
-  condition: string; // Can be derived from remarks
-  status: string; // Active/Inactive (based on transfer/disposal details)
-  
-  // Additional Tracking
-  transferDisposalDetails: string; // Transfer/Disposal Details
-  valuationAtTransferDisposal: string; // Valuation at Transfer/Disposal
-  scrapValueRealised: string; // Scrap Value Realised
-  scrapRecord: string; // Scrap Record (from Sheet3)
-  remarksAuthorisedSignatory: string; // Remarks & Authorised Signatory
-  
-  // Legacy fields for backward compatibility
-  assetCode: string;
-  assetName: string;
-  category: string;
-  supplier: string;
-  purchaseDate: string;
-  cost: string;
-  warrantyExpiry: string;
-  notes: string;
+  assetTagging: string;
+  assetClass: string;
+  assetSubClass: string;
+  description: string;
+  dateOfPurchase: string;
+  taxInvoice: string;
+  vendorsSuppliers: string;
+  location: string;
+  originalCost: string;
+  depreciationRate: string;
+  wdvMarch2022: string;
+  transferredDisposalDetails: string;
+  valuationAtTransfer: string;
+  scrapValueRealised: string;
+  remarks: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -90,9 +66,8 @@ export function AssetList() {
   const [filteredAssets, setFilteredAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [departmentFilter, setDepartmentFilter] = useState("all");
-  const [conditionFilter, setConditionFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [assetClassFilter, setAssetClassFilter] = useState("all");
+  const [locationFilter, setLocationFilter] = useState("all");
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -106,7 +81,7 @@ export function AssetList() {
 
   useEffect(() => {
     applyFilters();
-  }, [assets, searchTerm, departmentFilter, conditionFilter, statusFilter]);
+  }, [assets, searchTerm, assetClassFilter, locationFilter]);
 
   const fetchAssets = async () => {
     try {
@@ -141,31 +116,20 @@ export function AssetList() {
       const search = searchTerm.toLowerCase();
       filtered = filtered.filter(
         (asset) =>
-          asset.assetTagging.toLowerCase().includes(search) ||
-          asset.assetClass.toLowerCase().includes(search) ||
-          asset.assetSubClass.toLowerCase().includes(search) ||
-          asset.description.toLowerCase().includes(search) ||
-          asset.serialNumber.toLowerCase().includes(search) ||
-          asset.supplierVendor.toLowerCase().includes(search) ||
-          asset.location.toLowerCase().includes(search) ||
-          asset.department.toLowerCase().includes(search) ||
-          // Legacy fields for backward compatibility
-          asset.assetCode.toLowerCase().includes(search) ||
-          asset.assetName.toLowerCase().includes(search) ||
-          asset.supplier.toLowerCase().includes(search)
+          (asset.assetTagging && asset.assetTagging.toLowerCase().includes(search)) ||
+          (asset.description && asset.description.toLowerCase().includes(search)) ||
+          (asset.assetClass && asset.assetClass.toLowerCase().includes(search)) ||
+          (asset.location && asset.location.toLowerCase().includes(search)) ||
+          (asset.vendorsSuppliers && asset.vendorsSuppliers.toLowerCase().includes(search))
       );
     }
 
-    if (departmentFilter && departmentFilter !== "all") {
-      filtered = filtered.filter((asset) => asset.department === departmentFilter);
+    if (assetClassFilter && assetClassFilter !== "all") {
+      filtered = filtered.filter((asset) => asset.assetClass === assetClassFilter);
     }
 
-    if (conditionFilter && conditionFilter !== "all") {
-      filtered = filtered.filter((asset) => asset.condition === conditionFilter);
-    }
-
-    if (statusFilter && statusFilter !== "all") {
-      filtered = filtered.filter((asset) => asset.status === statusFilter);
+    if (locationFilter && locationFilter !== "all") {
+      filtered = filtered.filter((asset) => asset.location === locationFilter);
     }
 
     setFilteredAssets(filtered);
@@ -175,8 +139,11 @@ export function AssetList() {
     if (!selectedAsset) return;
 
     try {
+      // URL-encode the asset tagging to handle special characters like slashes
+      const encodedAssetTagging = encodeURIComponent(selectedAsset.assetTagging);
+      
       const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8862d32b/assets/${selectedAsset.assetCode}`,
+        `https://${projectId}.supabase.co/functions/v1/make-server-8862d32b/assets/${encodedAssetTagging}`,
         {
           method: "DELETE",
           headers: {
@@ -186,7 +153,8 @@ export function AssetList() {
       );
 
       if (!response.ok) {
-        throw new Error("Failed to delete asset");
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to delete asset");
       }
 
       toast.success("Asset deleted successfully");
@@ -195,86 +163,48 @@ export function AssetList() {
       setSelectedAsset(null);
     } catch (error) {
       console.error("Error deleting asset:", error);
-      toast.error("Failed to delete asset");
+      toast.error((error as Error).message || "Failed to delete asset");
     }
   };
 
   const handleExport = () => {
     const csvContent = [
       [
-        // Core Identification
         "Asset Tagging",
         "Asset Class",
-        "Asset Sub-Class",
+        "Asset Sub Class",
         "Description",
-        "Serial Number",
-        // Purchase & Vendor Information
         "Date of Purchase",
-        "Tax Invoice No.",
-        "Supplier/Vendor",
-        // Financial Information
+        "Tax Invoice",
+        "Vendors/Suppliers",
+        "Location",
         "Original Cost",
         "Depreciation Rate",
         "WDV as 31st March 2022",
-        // Current Status
-        "Location",
-        "Department",
-        "Condition",
-        "Status",
-        // Additional Tracking
-        "Transfer/Disposal Details",
-        "Valuation at Transfer/Disposal",
+        "Transferred/Disposal Details",
+        "Valuation at Transfer",
         "Scrap Value Realised",
-        "Scrap Record",
-        "Remarks & Authorised Signatory",
-        // Legacy fields
-        "Asset Code",
-        "Asset Name",
-        "Category",
-        "Supplier",
-        "Purchase Date",
-        "Cost",
-        "Warranty Expiry",
-        "Notes",
+        "Remarks",
       ],
       ...filteredAssets.map((asset) => [
-        // Core Identification
-        asset.assetTagging || "",
-        asset.assetClass || "",
-        asset.assetSubClass || "",
-        asset.description || "",
-        asset.serialNumber || "",
-        // Purchase & Vendor Information
-        asset.dateOfPurchase || "",
-        asset.taxInvoiceNo || "",
-        asset.supplierVendor || "",
-        // Financial Information
-        asset.originalCost || "",
-        asset.depreciationRate || "",
-        asset.wdvAs31stMarch2022 || "",
-        // Current Status
-        asset.location || "",
-        asset.department || "",
-        asset.condition || "",
-        asset.status || "",
-        // Additional Tracking
-        asset.transferDisposalDetails || "",
-        asset.valuationAtTransferDisposal || "",
-        asset.scrapValueRealised || "",
-        asset.scrapRecord || "",
-        asset.remarksAuthorisedSignatory || "",
-        // Legacy fields
-        asset.assetCode || "",
-        asset.assetName || "",
-        asset.category || "",
-        asset.supplier || "",
-        asset.purchaseDate || "",
-        asset.cost || "",
-        asset.warrantyExpiry || "",
-        asset.notes || "",
+        asset.assetTagging,
+        asset.assetClass,
+        asset.assetSubClass,
+        asset.description,
+        asset.dateOfPurchase,
+        asset.taxInvoice,
+        asset.vendorsSuppliers,
+        asset.location,
+        asset.originalCost,
+        asset.depreciationRate,
+        asset.wdvMarch2022,
+        asset.transferredDisposalDetails,
+        asset.valuationAtTransfer,
+        asset.scrapValueRealised,
+        asset.remarks,
       ]),
     ]
-      .map((row) => row.map((cell) => `"${cell}"`).join(","))
+      .map((row) => row.map((cell) => `"${cell || ''}"`).join(","))
       .join("\n");
 
     const blob = new Blob([csvContent], { type: "text/csv" });
@@ -287,10 +217,116 @@ export function AssetList() {
     toast.success("Assets exported successfully");
   };
 
+  const handleExportQRCodesPDF = async () => {
+    try {
+      toast.info("Generating QR codes PDF...");
+      
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
+
+      // PDF settings
+      const pageWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const margin = 15;
+      const qrSize = 40; // QR code size in mm
+      const labelHeight = 12; // Height for label text
+      const cellWidth = 60; // Width of each cell (QR + label)
+      const cellHeight = 60; // Height of each cell (QR + label + spacing)
+      const cols = 3; // 3 QR codes per row
+      const rows = 4; // 4 rows per page
+      const perPage = cols * rows; // 12 QR codes per page
+
+      let currentPage = 0;
+      
+      // Add title to first page
+      pdf.setFontSize(16);
+      pdf.text("Asset QR Codes", pageWidth / 2, margin, { align: "center" });
+      pdf.setFontSize(10);
+      pdf.text(
+        `Generated on ${new Date().toLocaleDateString()}`,
+        pageWidth / 2,
+        margin + 6,
+        { align: "center" }
+      );
+
+      for (let i = 0; i < filteredAssets.length; i++) {
+        const asset = filteredAssets[i];
+        const indexInPage = i % perPage;
+
+        // Add new page if needed (but not for the first item)
+        if (i > 0 && indexInPage === 0) {
+          pdf.addPage();
+          currentPage++;
+        }
+
+        // Calculate position
+        const row = Math.floor(indexInPage / cols);
+        const col = indexInPage % cols;
+        const x = margin + col * cellWidth;
+        const y = margin + 15 + row * cellHeight; // 15mm offset for title on first page
+
+        // Generate QR code
+        const qrDataUrl = await QRCodeLib.toDataURL(asset.assetTagging, {
+          width: 400,
+          margin: 1,
+        });
+
+        // Add QR code image
+        pdf.addImage(qrDataUrl, "PNG", x + (cellWidth - qrSize) / 2, y, qrSize, qrSize);
+
+        // Add asset tagging label below QR code
+        pdf.setFontSize(9);
+        pdf.text(
+          asset.assetTagging,
+          x + cellWidth / 2,
+          y + qrSize + 5,
+          { align: "center" }
+        );
+
+        // Add description/sub-class if available (smaller text)
+        if (asset.description || asset.assetSubClass) {
+          pdf.setFontSize(7);
+          const label = asset.description || asset.assetSubClass;
+          const maxWidth = cellWidth - 4;
+          const lines = pdf.splitTextToSize(label, maxWidth);
+          pdf.text(
+            lines[0], // Just show first line to avoid overflow
+            x + cellWidth / 2,
+            y + qrSize + 9,
+            { align: "center" }
+          );
+        }
+      }
+
+      // Add page numbers
+      const totalPages = pdf.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        pdf.setPage(i);
+        pdf.setFontSize(8);
+        pdf.text(
+          `Page ${i} of ${totalPages}`,
+          pageWidth / 2,
+          pageHeight - 10,
+          { align: "center" }
+        );
+      }
+
+      // Save the PDF
+      pdf.save(`asset_qr_codes_${new Date().toISOString().split("T")[0]}.pdf`);
+      toast.success(`Generated PDF with ${filteredAssets.length} QR codes`);
+    } catch (error) {
+      console.error("Error generating QR codes PDF:", error);
+      toast.error("Failed to generate QR codes PDF");
+    }
+  };
+
   const handleShowQR = async (asset: Asset) => {
     setSelectedAsset(asset);
     try {
-      const qrUrl = await QRCodeLib.toDataURL(asset.assetCode, {
+      const qrUrl = await QRCodeLib.toDataURL(asset.assetTagging, {
         width: 300,
         margin: 2,
       });
@@ -306,44 +342,13 @@ export function AssetList() {
     if (!selectedAsset || !qrCodeUrl) return;
     const a = document.createElement("a");
     a.href = qrCodeUrl;
-    a.download = `qr_${selectedAsset.assetCode}.png`;
+    a.download = `qr_${selectedAsset.assetTagging.replace(/\//g, '_')}.png`;
     a.click();
     toast.success("QR code downloaded");
   };
 
-  const getConditionColor = (condition: string) => {
-    switch (condition) {
-      case "Excellent":
-        return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
-      case "Good":
-        return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200";
-      case "Fair":
-        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200";
-      case "Poor":
-        return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200";
-      default:
-        return "";
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "Active":
-        return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
-      case "Inactive":
-        return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200";
-      case "Under Repair":
-        return "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200";
-      case "Retired":
-        return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200";
-      default:
-        return "";
-    }
-  };
-
-  const uniqueDepartments = Array.from(new Set(assets.map((a) => a.department)));
-  const uniqueConditions = Array.from(new Set(assets.map((a) => a.condition)));
-  const uniqueStatuses = Array.from(new Set(assets.map((a) => a.status)));
+  const uniqueAssetClasses = Array.from(new Set(assets.map((a) => a.assetClass).filter(Boolean)));
+  const uniqueLocations = Array.from(new Set(assets.map((a) => a.location).filter(Boolean)));
 
   if (loading) {
     return (
@@ -361,17 +366,23 @@ export function AssetList() {
     <div className="p-6 space-y-6">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between sm:flex-col md:flex-row">
             <CardTitle>Asset Inventory</CardTitle>
-            <Button onClick={handleExport} variant="outline" size="sm">
-              <Download className="h-4 w-4 mr-2" />
-              Export CSV
-            </Button>
+            <div className="flex gap-2 sm:flex-col lg:flex-row sm:mt-5 md:mt-0">
+              <Button onClick={handleExportQRCodesPDF} variant="outline" size="sm">
+                <FileText className="h-4 w-4 mr-2" />
+                Export QR Codes PDF
+              </Button>
+              <Button onClick={handleExport} variant="outline" size="sm">
+                <Download className="h-4 w-4 mr-2" />
+                Export CSV
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Search and Filters */}
-          <div className="grid gap-4 md:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-3">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -382,43 +393,29 @@ export function AssetList() {
               />
             </div>
 
-            <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+            <Select value={assetClassFilter} onValueChange={setAssetClassFilter}>
               <SelectTrigger>
-                <SelectValue placeholder="All Departments" />
+                <SelectValue placeholder="All Asset Classes" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Departments</SelectItem>
-                {uniqueDepartments.map((dept) => (
-                  <SelectItem key={dept} value={dept}>
-                    {dept}
+                <SelectItem value="all">All Asset Classes</SelectItem>
+                {uniqueAssetClasses.map((assetClass) => (
+                  <SelectItem key={assetClass} value={assetClass}>
+                    {assetClass}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
 
-            <Select value={conditionFilter} onValueChange={setConditionFilter}>
+            <Select value={locationFilter} onValueChange={setLocationFilter}>
               <SelectTrigger>
-                <SelectValue placeholder="All Conditions" />
+                <SelectValue placeholder="All Locations" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Conditions</SelectItem>
-                {uniqueConditions.map((condition) => (
-                  <SelectItem key={condition} value={condition}>
-                    {condition}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="All Statuses" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                {uniqueStatuses.map((status) => (
-                  <SelectItem key={status} value={status}>
-                    {status}
+                <SelectItem value="all">All Locations</SelectItem>
+                {uniqueLocations.map((location) => (
+                  <SelectItem key={location} value={location}>
+                    {location}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -430,47 +427,37 @@ export function AssetList() {
           </div>
 
           {/* Assets Table */}
-          <div className="border rounded-lg">
+          <div className="border rounded-lg overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Asset Tagging</TableHead>
-                  <TableHead>Asset Class</TableHead>
+                  <TableHead>Class</TableHead>
+                  <TableHead>Sub Class</TableHead>
                   <TableHead>Description</TableHead>
-                  <TableHead>Department</TableHead>
                   <TableHead>Location</TableHead>
                   <TableHead>Original Cost</TableHead>
-                  <TableHead>Condition</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>WDV</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredAssets.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                       No assets found
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredAssets.map((asset) => (
-                    <TableRow key={asset.assetTagging || asset.assetCode}>
-                      <TableCell>{asset.assetTagging || asset.assetCode}</TableCell>
-                      <TableCell>{asset.assetClass}</TableCell>
-                      <TableCell className="max-w-xs truncate">{asset.description}</TableCell>
-                      <TableCell>{asset.department}</TableCell>
-                      <TableCell>{asset.location}</TableCell>
-                      <TableCell>${parseFloat(asset.originalCost || asset.cost || "0").toLocaleString()}</TableCell>
-                      <TableCell>
-                        <Badge className={getConditionColor(asset.condition)} variant="secondary">
-                          {asset.condition}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge className={getStatusColor(asset.status)} variant="secondary">
-                          {asset.status}
-                        </Badge>
-                      </TableCell>
+                    <TableRow key={asset.assetTagging}>
+                      <TableCell>{asset.assetTagging}</TableCell>
+                      <TableCell>{asset.assetClass || 'N/A'}</TableCell>
+                      <TableCell>{asset.assetSubClass || 'N/A'}</TableCell>
+                      <TableCell className="max-w-[200px] truncate">{asset.description || 'N/A'}</TableCell>
+                      <TableCell className="max-w-[150px] truncate">{asset.location || 'N/A'}</TableCell>
+                      <TableCell>₹{parseFloat(asset.originalCost || "0").toLocaleString('en-IN')}</TableCell>
+                      <TableCell>₹{parseFloat(asset.wdvMarch2022 || "0").toLocaleString('en-IN')}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
                           <Button
@@ -523,133 +510,77 @@ export function AssetList() {
 
       {/* View Dialog */}
       <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Asset Details</DialogTitle>
             <DialogDescription>Complete information about this asset</DialogDescription>
           </DialogHeader>
           {selectedAsset && (
             <div className="grid gap-4 py-4">
-              {/* Core Identification */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Core Identification</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-sm text-muted-foreground">Asset Tagging</div>
-                    <div>{selectedAsset.assetTagging || selectedAsset.assetCode || "N/A"}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">Asset Class</div>
-                    <div>{selectedAsset.assetClass || "N/A"}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">Asset Sub-Class</div>
-                    <div>{selectedAsset.assetSubClass || "N/A"}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">Serial Number</div>
-                    <div>{selectedAsset.serialNumber || "N/A"}</div>
-                  </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="text-sm text-muted-foreground">Asset Tagging</div>
+                  <div>{selectedAsset.assetTagging}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">Asset Class</div>
+                  <div>{selectedAsset.assetClass || 'N/A'}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">Asset Sub Class</div>
+                  <div>{selectedAsset.assetSubClass || 'N/A'}</div>
                 </div>
                 <div>
                   <div className="text-sm text-muted-foreground">Description</div>
-                  <div className="p-3 bg-muted rounded-md">{selectedAsset.description || selectedAsset.assetName || "N/A"}</div>
-                </div>
-              </div>
-
-              {/* Purchase & Vendor Information */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Purchase & Vendor Information</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-sm text-muted-foreground">Date of Purchase</div>
-                    <div>{selectedAsset.dateOfPurchase || selectedAsset.purchaseDate || "N/A"}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">Tax Invoice No.</div>
-                    <div>{selectedAsset.taxInvoiceNo || "N/A"}</div>
-                  </div>
-                  <div className="col-span-2">
-                    <div className="text-sm text-muted-foreground">Supplier/Vendor</div>
-                    <div>{selectedAsset.supplierVendor || selectedAsset.supplier || "N/A"}</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Financial Information */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Financial Information</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-sm text-muted-foreground">Original Cost</div>
-                    <div>${parseFloat(selectedAsset.originalCost || selectedAsset.cost || "0").toLocaleString()}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">Depreciation Rate</div>
-                    <div>{selectedAsset.depreciationRate || "N/A"}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">WDV as 31st March 2022</div>
-                    <div>{selectedAsset.wdvAs31stMarch2022 || "N/A"}</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Current Status */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Current Status</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-sm text-muted-foreground">Location</div>
-                    <div>{selectedAsset.location || "N/A"}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">Department</div>
-                    <div>{selectedAsset.department || "N/A"}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">Condition</div>
-                    <Badge className={getConditionColor(selectedAsset.condition)} variant="secondary">
-                      {selectedAsset.condition}
-                    </Badge>
-                  </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">Status</div>
-                    <Badge className={getStatusColor(selectedAsset.status)} variant="secondary">
-                      {selectedAsset.status}
-                    </Badge>
-                  </div>
-                </div>
-              </div>
-
-              {/* Additional Tracking */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Additional Tracking</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-sm text-muted-foreground">Transfer/Disposal Details</div>
-                    <div>{selectedAsset.transferDisposalDetails || "N/A"}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">Valuation at Transfer/Disposal</div>
-                    <div>{selectedAsset.valuationAtTransferDisposal || "N/A"}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">Scrap Value Realised</div>
-                    <div>{selectedAsset.scrapValueRealised || "N/A"}</div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">Scrap Record</div>
-                    <div>{selectedAsset.scrapRecord || "N/A"}</div>
-                  </div>
+                  <div>{selectedAsset.description || 'N/A'}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-muted-foreground">Remarks & Authorised Signatory</div>
-                  <div className="p-3 bg-muted rounded-md">{selectedAsset.remarksAuthorisedSignatory || selectedAsset.notes || "N/A"}</div>
+                  <div className="text-sm text-muted-foreground">Date of Purchase</div>
+                  <div>{selectedAsset.dateOfPurchase || 'N/A'}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">Tax Invoice</div>
+                  <div>{selectedAsset.taxInvoice || 'N/A'}</div>
+                </div>
+                <div className="col-span-2">
+                  <div className="text-sm text-muted-foreground">Vendors/Suppliers Name & Address</div>
+                  <div>{selectedAsset.vendorsSuppliers || 'N/A'}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">Location</div>
+                  <div>{selectedAsset.location || 'N/A'}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">Original Cost</div>
+                  <div>₹{parseFloat(selectedAsset.originalCost || "0").toLocaleString('en-IN')}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">Depreciation Rate</div>
+                  <div>{selectedAsset.depreciationRate ? `${selectedAsset.depreciationRate}%` : 'N/A'}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">WDV as 31st March 2022</div>
+                  <div>₹{parseFloat(selectedAsset.wdvMarch2022 || "0").toLocaleString('en-IN')}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">Transferred/Disposal Details</div>
+                  <div>{selectedAsset.transferredDisposalDetails || 'N/A'}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">Valuation at Transfer/Disposal</div>
+                  <div>{selectedAsset.valuationAtTransfer ? `₹${parseFloat(selectedAsset.valuationAtTransfer).toLocaleString('en-IN')}` : 'N/A'}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground">Scrap Value Realised</div>
+                  <div>{selectedAsset.scrapValueRealised ? `₹${parseFloat(selectedAsset.scrapValueRealised).toLocaleString('en-IN')}` : 'N/A'}</div>
                 </div>
               </div>
-
-              {/* Legacy fields and metadata */}
+              {selectedAsset.remarks && (
+                <div>
+                  <div className="text-sm text-muted-foreground mb-1">Remarks & Authorised Signatory</div>
+                  <div className="p-3 bg-muted rounded-md">{selectedAsset.remarks}</div>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4 pt-4 border-t">
                 <div>
                   <div className="text-sm text-muted-foreground">Created At</div>
@@ -673,7 +604,7 @@ export function AssetList() {
           </DialogHeader>
           {selectedAsset && (
             <AssetForm
-              assetCode={selectedAsset.assetCode}
+              assetTagging={selectedAsset.assetTagging}
               onSuccess={() => {
                 setEditDialogOpen(false);
                 fetchAssets();
@@ -690,7 +621,7 @@ export function AssetList() {
           <DialogHeader>
             <DialogTitle>QR Code</DialogTitle>
             <DialogDescription>
-              {selectedAsset?.assetName} ({selectedAsset?.assetCode})
+              {selectedAsset?.description || selectedAsset?.assetSubClass} ({selectedAsset?.assetTagging})
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col items-center gap-4 py-4">
@@ -711,8 +642,8 @@ export function AssetList() {
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently delete the asset "{selectedAsset?.assetName}" (
-              {selectedAsset?.assetCode}). This action cannot be undone.
+              This will permanently delete the asset "{selectedAsset?.description || selectedAsset?.assetSubClass}" (
+              {selectedAsset?.assetTagging}). This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

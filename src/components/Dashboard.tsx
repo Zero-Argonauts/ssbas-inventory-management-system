@@ -1,14 +1,14 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
-import { Package, TrendingUp, AlertCircle, CheckCircle } from "lucide-react";
+import { Package, TrendingUp, DollarSign, TrendingDown } from "lucide-react";
 import { projectId, publicAnonKey } from "../utils/supabase/info";
 
 interface DashboardStats {
   totalAssets: number;
-  byDepartment: Record<string, number>;
-  byCondition: Record<string, number>;
-  byStatus: Record<string, number>;
-  totalValue: number;
+  byAssetClass: Record<string, number>;
+  byLocation: Record<string, number>;
+  totalOriginalCost: number;
+  totalWDV: number;
   recentUpdates: any[];
 }
 
@@ -73,6 +73,11 @@ export function Dashboard() {
     );
   }
 
+  const totalDepreciation = stats.totalOriginalCost - stats.totalWDV;
+  const depreciationPercentage = stats.totalOriginalCost > 0 
+    ? ((totalDepreciation / stats.totalOriginalCost) * 100).toFixed(1)
+    : 0;
+
   return (
     <div className="p-6 space-y-6">
       {/* Overview Cards */}
@@ -85,123 +90,85 @@ export function Dashboard() {
           <CardContent>
             <div className="text-2xl font-bold">{stats.totalAssets}</div>
             <p className="text-xs text-muted-foreground mt-1">
-              Tracked across all departments
+              Tracked across all locations
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle>Total Value</CardTitle>
+            <CardTitle>Original Cost</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              ₹{stats.totalValue.toLocaleString()}
+              ₹{stats.totalOriginalCost.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Combined asset value
+              Total purchase value
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle>Active Assets</CardTitle>
-            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+            <CardTitle>Current WDV</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {stats.byStatus["Active"] || 0}
+              ₹{stats.totalWDV.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Currently in use
+              Written down value (31st March 2022)
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle>Needs Attention</CardTitle>
-            <AlertCircle className="h-4 w-4 text-muted-foreground" />
+            <CardTitle>Depreciation</CardTitle>
+            <TrendingDown className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {(stats.byStatus["Under Repair"] || 0) + (stats.byCondition["Poor"] || 0)}
+              {depreciationPercentage}%
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Under repair or poor condition
+              ₹{totalDepreciation.toLocaleString('en-IN', { maximumFractionDigits: 0 })} total depreciation
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Department Summary */}
+      {/* Asset Class & Location Summary */}
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Assets by Department</CardTitle>
-            <CardDescription>Distribution across departments</CardDescription>
+            <CardTitle>Assets by Class</CardTitle>
+            <CardDescription>Distribution across asset classes</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {Object.entries(stats.byDepartment)
-                .sort(([, a], [, b]) => (b as number) - (a as number))
-                .map(([dept, count]) => (
-                  <div key={dept} className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between mb-1">
-                        <span>{dept}</span>
-                        <span className="text-sm text-muted-foreground">
-                          {count} ({Math.round(((count as number) / stats.totalAssets) * 100)}%)
-                        </span>
-                      </div>
-                      <div className="w-full bg-muted rounded-full h-2">
-                        <div
-                          className="bg-primary h-2 rounded-full transition-all"
-                          style={{
-                            width: `${((count as number) / stats.totalAssets) * 100}%`,
-                          }}
-                        ></div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Asset Condition</CardTitle>
-            <CardDescription>Overall condition status</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {Object.entries(stats.byCondition)
-                .sort(([, a], [, b]) => (b as number) - (a as number))
-                .map(([condition, count]) => {
-                  const color =
-                    condition === "Excellent"
-                      ? "bg-green-500"
-                      : condition === "Good"
-                        ? "bg-blue-500"
-                        : condition === "Fair"
-                          ? "bg-yellow-500"
-                          : "bg-red-500";
-
-                  return (
-                    <div key={condition} className="flex items-center justify-between">
+              {Object.entries(stats.byAssetClass).length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No asset class data available
+                </p>
+              ) : (
+                Object.entries(stats.byAssetClass)
+                  .sort(([, a], [, b]) => (b as number) - (a as number))
+                  .map(([assetClass, count]) => (
+                    <div key={assetClass} className="flex items-center justify-between">
                       <div className="flex-1">
                         <div className="flex items-center justify-between mb-1">
-                          <span>{condition}</span>
+                          <span>{assetClass}</span>
                           <span className="text-sm text-muted-foreground">
-                            {count} ({Math.round(((count as number) / stats.totalAssets) * 100)}%)
+                            {count as number} ({Math.round(((count as number) / stats.totalAssets) * 100)}%)
                           </span>
                         </div>
                         <div className="w-full bg-muted rounded-full h-2">
                           <div
-                            className={`${color} h-2 rounded-full transition-all`}
+                            className="bg-primary h-2 rounded-full transition-all"
                             style={{
                               width: `${((count as number) / stats.totalAssets) * 100}%`,
                             }}
@@ -209,8 +176,50 @@ export function Dashboard() {
                         </div>
                       </div>
                     </div>
-                  );
-                })}
+                  ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Assets by Location</CardTitle>
+            <CardDescription>Distribution across locations</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {Object.entries(stats.byLocation).length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  No location data available
+                </p>
+              ) : (
+                Object.entries(stats.byLocation)
+                  .sort(([, a], [, b]) => (b as number) - (a as number))
+                  .slice(0, 6)
+                  .map(([location, count]) => {
+                    return (
+                      <div key={location} className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="truncate">{location}</span>
+                            <span className="text-sm text-muted-foreground ml-2">
+                              {count as number} ({Math.round(((count as number) / stats.totalAssets) * 100)}%)
+                            </span>
+                          </div>
+                          <div className="w-full bg-muted rounded-full h-2">
+                            <div
+                              className="bg-blue-500 h-2 rounded-full transition-all"
+                              style={{
+                                width: `${((count as number) / stats.totalAssets) * 100}%`,
+                              }}
+                            ></div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+              )}
             </div>
           </CardContent>
         </Card>
@@ -229,15 +238,15 @@ export function Dashboard() {
                 No recent updates
               </p>
             ) : (
-              stats.recentUpdates.map((asset) => (
+              stats.recentUpdates.map((asset: any) => (
                 <div
-                  key={asset.assetCode}
+                  key={asset.assetTagging}
                   className="flex items-center justify-between border-b pb-3 last:border-0"
                 >
                   <div>
-                    <div>{asset.assetName}</div>
+                    <div>{asset.description || asset.assetSubClass || 'N/A'}</div>
                     <div className="text-sm text-muted-foreground">
-                      {asset.assetCode} • {asset.department}
+                      {asset.assetTagging} • {asset.assetClass || 'N/A'}
                     </div>
                   </div>
                   <div className="text-sm text-muted-foreground text-right">

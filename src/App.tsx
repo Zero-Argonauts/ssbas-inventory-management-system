@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./components/ui/tabs";
 import { Dashboard } from "./components/Dashboard";
 import { AssetForm } from "./components/AssetForm";
@@ -25,12 +25,14 @@ export default function App() {
       <header className="border-b bg-card">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center gap-3">
-            <Package className="h-8 w-8 text-primary" />
-            <div>
-              <h1 className="text-2xl font-bold">Asset Management System</h1>
+            {/* <Package className="h-8 w-8 text-primary" /> */}
+            <div className="flex justify-between w-full items-center">
+              {/* <h1 className="text-2xl font-bold">Asset Management System</h1>
               <p className="text-sm text-muted-foreground">
                 QR Code-based tracking for college properties
-              </p>
+              </p> */}
+              <img src="/ssbas.svg" alt="" className="h-15" />
+              <img src="/Trust.svg" alt="" className="h-15" />
             </div>
           </div>
         </div>
@@ -39,7 +41,7 @@ export default function App() {
       {/* Main Content */}
       <main className="container mx-auto px-4 py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full max-w-2xl grid-cols-5">
+          <TabsList className="grid w-full max-w-2xl mx-auto grid-cols-5">
             <TabsTrigger value="dashboard" className="flex items-center gap-2">
               <LayoutDashboard className="h-4 w-4" />
               <span className="hidden sm:inline">Dashboard</span>
