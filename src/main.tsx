@@ -1,7 +1,18 @@
-
+ 
   import { createRoot } from "react-dom/client";
   import App from "./App.tsx";
   import "./index.css";
-
-  createRoot(document.getElementById("root")!).render(<App />);
+  import { ClerkProvider } from "@clerk/clerk-react";
+ 
+  const clerkPublishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+ 
+  if (!clerkPublishableKey) {
+    console.error("Missing VITE_CLERK_PUBLISHABLE_KEY environment variable for Clerk.");
+  }
+ 
+  createRoot(document.getElementById("root")!).render(
+    <ClerkProvider publishableKey={clerkPublishableKey}>
+      <App />
+    </ClerkProvider>,
+  );
   
