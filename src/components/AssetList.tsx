@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { Checkbox } from "./ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -35,7 +36,7 @@ import {
 } from "./ui/alert-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Search, Edit, Trash2, Eye, QrCode, Download, FileText } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "sonner@2.0.3";
 import { projectId, publicAnonKey } from "../utils/supabase/info";
 import { AssetForm } from "./AssetForm";
 import QRCodeLib from "qrcode";
@@ -63,15 +64,16 @@ interface Asset {
 
 export function AssetList() {
   const [assets, setAssets] = useState<Asset[]>([]);
-  const [filteredAssets, setFilteredAssets] = useState<Asset[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [assetClassFilter, setAssetClassFilter] = useState("all");
   const [locationFilter, setLocationFilter] = useState("all");
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
+  const [selectedAssets, setSelectedAssets] = useState<string[]>([]); // For bulk selection
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false); // For bulk delete confirmation
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState("");
 
@@ -79,11 +81,7 @@ export function AssetList() {
     fetchAssets();
   }, []);
 
-  useEffect(() => {
-    applyFilters();
-  }, [assets, searchTerm, assetClassFilter, locationFilter]);
-
-  const fetchAssets = async () => {
+  const fetchAssets = useCallback(async () => {
     try {
       const response = await fetch(
         `https://${projectId}.supabase.co/functions/v1/make-server-8862d32b/assets`,
@@ -100,16 +98,27 @@ export function AssetList() {
 
       const data = await response.json();
       setAssets(data.assets);
-      setFilteredAssets(data.assets);
     } catch (error) {
       console.error("Error fetching assets:", error);
       toast.error("Failed to load assets");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const applyFilters = () => {
+  // Memoize unique values for filters
+  const uniqueAssetClasses = useMemo(
+    () => Array.from(new Set(assets.map((a) => a.assetClass).filter(Boolean))),
+    [assets]
+  );
+
+  const uniqueLocations = useMemo(
+    () => Array.from(new Set(assets.map((a) => a.location).filter(Boolean))),
+    [assets]
+  );
+
+  // Memoize filtered assets to avoid recalculation on every render
+  const filteredAssets = useMemo(() => {
     let filtered = [...assets];
 
     if (searchTerm) {
@@ -132,10 +141,10 @@ export function AssetList() {
       filtered = filtered.filter((asset) => asset.location === locationFilter);
     }
 
-    setFilteredAssets(filtered);
-  };
+    return filtered;
+  }, [assets, searchTerm, assetClassFilter, locationFilter]);
 
-  const handleDelete = async () => {
+  const handleDelete = useCallback(async () => {
     if (!selectedAsset) return;
 
     try {
@@ -165,9 +174,44 @@ export function AssetList() {
       console.error("Error deleting asset:", error);
       toast.error((error as Error).message || "Failed to delete asset");
     }
-  };
+  }, [selectedAsset, fetchAssets]);
 
-  const handleExport = () => {
+  const handleBulkDelete = useCallback(async () => {
+    if (selectedAssets.length === 0) return;
+
+    try {
+      const deletePromises = selectedAssets.map(async (assetTagging) => {
+        // URL-encode the asset tagging to handle special characters like slashes
+        const encodedAssetTagging = encodeURIComponent(assetTagging);
+        
+        const response = await fetch(
+          `https://${projectId}.supabase.co/functions/v1/make-server-8862d32b/assets/${encodedAssetTagging}`,
+          {
+            method: "DELETE",
+            headers: {
+              Authorization: `Bearer ${publicAnonKey}`,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || "Failed to delete asset");
+        }
+      });
+
+      await Promise.all(deletePromises);
+      toast.success("Selected assets deleted successfully");
+      fetchAssets();
+      setBulkDeleteDialogOpen(false);
+      setSelectedAssets([]);
+    } catch (error) {
+      console.error("Error deleting assets:", error);
+      toast.error((error as Error).message || "Failed to delete assets");
+    }
+  }, [selectedAssets, fetchAssets]);
+
+  const handleExport = useCallback(() => {
     const csvContent = [
       [
         "Asset Tagging",
@@ -215,9 +259,9 @@ export function AssetList() {
     a.click();
     URL.revokeObjectURL(url);
     toast.success("Assets exported successfully");
-  };
+  }, [filteredAssets]);
 
-  const handleExportQRCodesPDF = async () => {
+  const handleExportQRCodesPDF = useCallback(async () => {
     try {
       toast.info("Generating QR codes PDF...");
       
@@ -321,9 +365,9 @@ export function AssetList() {
       console.error("Error generating QR codes PDF:", error);
       toast.error("Failed to generate QR codes PDF");
     }
-  };
+  }, [filteredAssets]);
 
-  const handleShowQR = async (asset: Asset) => {
+  const handleShowQR = useCallback(async (asset: Asset) => {
     setSelectedAsset(asset);
     try {
       const qrUrl = await QRCodeLib.toDataURL(asset.assetTagging, {
@@ -336,26 +380,47 @@ export function AssetList() {
       console.error("Error generating QR code:", error);
       toast.error("Failed to generate QR code");
     }
-  };
+  }, []);
 
-  const handleDownloadQR = () => {
+  const handleDownloadQR = useCallback(() => {
     if (!selectedAsset || !qrCodeUrl) return;
     const a = document.createElement("a");
     a.href = qrCodeUrl;
     a.download = `qr_${selectedAsset.assetTagging.replace(/\//g, '_')}.png`;
     a.click();
     toast.success("QR code downloaded");
-  };
+  }, [selectedAsset, qrCodeUrl]);
 
-  const uniqueAssetClasses = Array.from(new Set(assets.map((a) => a.assetClass).filter(Boolean)));
-  const uniqueLocations = Array.from(new Set(assets.map((a) => a.location).filter(Boolean)));
+  // Handle select all checkbox
+  const handleSelectAll = useCallback((checked: boolean) => {
+    if (checked) {
+      setSelectedAssets(filteredAssets.map((asset) => asset.assetTagging));
+    } else {
+      setSelectedAssets([]);
+    }
+  }, [filteredAssets]);
+
+  // Handle individual checkbox
+  const handleSelectAsset = useCallback((assetTagging: string, checked: boolean) => {
+    setSelectedAssets(prev => {
+      if (checked) {
+        return [...prev, assetTagging];
+      } else {
+        return prev.filter((id) => id !== assetTagging);
+      }
+    });
+  }, []);
+
+  // Check if all assets are selected
+  const allSelected = filteredAssets.length > 0 && selectedAssets.length === filteredAssets.length;
+  const someSelected = selectedAssets.length > 0 && selectedAssets.length < filteredAssets.length;
 
   if (loading) {
     return (
-      <div className="p-6">
+      <div className="p-3 sm:p-4 md:p-6 lg:p-4">
         <Card>
-          <CardContent className="py-12">
-            <div className="text-center text-muted-foreground">Loading assets...</div>
+          <CardContent className="py-8 sm:py-12 lg:py-8">
+            <div className="text-center text-muted-foreground text-sm">Loading assets...</div>
           </CardContent>
         </Card>
       </div>
@@ -363,38 +428,38 @@ export function AssetList() {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-3 sm:p-4 md:p-6 lg:p-4 space-y-3 sm:space-y-4 md:space-y-6 lg:space-y-4">
       <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between sm:flex-col md:flex-row">
-            <CardTitle>Asset Inventory</CardTitle>
-            <div className="flex gap-2 sm:flex-col lg:flex-row sm:mt-5 md:mt-0">
-              <Button onClick={handleExportQRCodesPDF} variant="outline" size="sm">
-                <FileText className="h-4 w-4 mr-2" />
-                Export QR Codes PDF
+        <CardHeader className="p-3 sm:p-4 md:p-6 lg:p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 lg:gap-3">
+            <CardTitle className="text-base sm:text-lg md:text-xl lg:text-lg">Asset Inventory</CardTitle>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={handleExportQRCodesPDF} variant="outline" size="sm" className="flex-1 sm:flex-none text-xs sm:text-sm lg:h-8">
+                <FileText className="h-3 w-3 sm:h-4 sm:w-4 lg:h-3.5 lg:w-3.5 mr-1 sm:mr-2 lg:mr-1.5 shrink-0" />
+                <span className="truncate">Export QR PDF</span>
               </Button>
-              <Button onClick={handleExport} variant="outline" size="sm">
-                <Download className="h-4 w-4 mr-2" />
-                Export CSV
+              <Button onClick={handleExport} variant="outline" size="sm" className="flex-1 sm:flex-none text-xs sm:text-sm lg:h-8">
+                <Download className="h-3 w-3 sm:h-4 sm:w-4 lg:h-3.5 lg:w-3.5 mr-1 sm:mr-2 lg:mr-1.5 shrink-0" />
+                <span className="truncate">Export CSV</span>
               </Button>
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="p-3 sm:p-4 md:p-6 lg:p-4 space-y-3 sm:space-y-4 lg:space-y-3">
           {/* Search and Filters */}
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-2 sm:gap-3 md:gap-4 lg:gap-2.5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Search className="absolute left-2 sm:left-3 lg:left-2.5 top-1/2 transform -translate-y-1/2 h-3 w-3 sm:h-4 sm:w-4 lg:h-3.5 lg:w-3.5 text-muted-foreground shrink-0" />
               <Input
                 placeholder="Search assets..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9"
+                className="pl-7 sm:pl-9 lg:pl-8 text-xs sm:text-sm h-9 sm:h-10 lg:h-9"
               />
             </div>
 
             <Select value={assetClassFilter} onValueChange={setAssetClassFilter}>
-              <SelectTrigger>
+              <SelectTrigger className="text-xs sm:text-sm h-9 sm:h-10 lg:h-9">
                 <SelectValue placeholder="All Asset Classes" />
               </SelectTrigger>
               <SelectContent>
@@ -408,7 +473,7 @@ export function AssetList() {
             </Select>
 
             <Select value={locationFilter} onValueChange={setLocationFilter}>
-              <SelectTrigger>
+              <SelectTrigger className="text-xs sm:text-sm h-9 sm:h-10 lg:h-9">
                 <SelectValue placeholder="All Locations" />
               </SelectTrigger>
               <SelectContent>
@@ -422,44 +487,84 @@ export function AssetList() {
             </Select>
           </div>
 
-          <div className="text-sm text-muted-foreground">
+          <div className="text-xs sm:text-sm text-muted-foreground">
             Showing {filteredAssets.length} of {assets.length} assets
           </div>
 
+          {/* Bulk Delete Button */}
+          {selectedAssets.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setBulkDeleteDialogOpen(true)}
+                className="text-xs sm:text-sm h-8 sm:h-9 lg:h-8"
+              >
+                <Trash2 className="h-3 w-3 sm:h-4 sm:w-4 lg:h-3.5 lg:w-3.5 mr-1 sm:mr-2 lg:mr-1.5 shrink-0" />
+                <span className="truncate">Delete Selected ({selectedAssets.length})</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedAssets([])}
+                className="text-xs sm:text-sm h-8 sm:h-9 lg:h-8"
+              >
+                Clear Selection
+              </Button>
+            </div>
+          )}
+
           {/* Assets Table */}
-          <div className="border rounded-lg overflow-x-auto">
+          <div className="border rounded-lg overflow-x-auto -mx-3 sm:mx-0">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Asset Tagging</TableHead>
-                  <TableHead>Class</TableHead>
-                  <TableHead>Sub Class</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Location</TableHead>
-                  <TableHead>Original Cost</TableHead>
-                  <TableHead>WDV</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="w-8 sm:w-10 lg:w-9 px-2 sm:px-4 lg:px-3">
+                    <Checkbox
+                      checked={allSelected}
+                      indeterminate={someSelected}
+                      onCheckedChange={(checked) => handleSelectAll(checked as boolean)}
+                      className="h-3 w-3 sm:h-4 sm:w-4"
+                    />
+                  </TableHead>
+                  <TableHead className="min-w-[100px] px-2 sm:px-4 lg:px-3 text-xs sm:text-sm">Asset Tagging</TableHead>
+                  <TableHead className="min-w-[80px] px-2 sm:px-4 lg:px-3 text-xs sm:text-sm hidden md:table-cell">Class</TableHead>
+                  <TableHead className="min-w-[80px] px-2 sm:px-4 lg:px-3 text-xs sm:text-sm hidden lg:table-cell">Sub Class</TableHead>
+                  <TableHead className="min-w-[120px] px-2 sm:px-4 lg:px-3 text-xs sm:text-sm hidden sm:table-cell">Description</TableHead>
+                  <TableHead className="min-w-[100px] px-2 sm:px-4 lg:px-3 text-xs sm:text-sm hidden lg:table-cell">Location</TableHead>
+                  <TableHead className="min-w-[80px] px-2 sm:px-4 lg:px-3 text-xs sm:text-sm hidden xl:table-cell">Original Cost</TableHead>
+                  <TableHead className="min-w-[80px] px-2 sm:px-4 lg:px-3 text-xs sm:text-sm hidden xl:table-cell">WDV</TableHead>
+                  <TableHead className="text-right px-2 sm:px-4 lg:px-3 text-xs sm:text-sm sticky right-0 bg-background">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredAssets.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={9} className="text-center py-6 sm:py-8 lg:py-6 text-muted-foreground text-xs sm:text-sm">
                       No assets found
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredAssets.map((asset) => (
                     <TableRow key={asset.assetTagging}>
-                      <TableCell>{asset.assetTagging}</TableCell>
-                      <TableCell>{asset.assetClass || 'N/A'}</TableCell>
-                      <TableCell>{asset.assetSubClass || 'N/A'}</TableCell>
-                      <TableCell className="max-w-[200px] truncate">{asset.description || 'N/A'}</TableCell>
-                      <TableCell className="max-w-[150px] truncate">{asset.location || 'N/A'}</TableCell>
-                      <TableCell>₹{parseFloat(asset.originalCost || "0").toLocaleString('en-IN')}</TableCell>
-                      <TableCell>₹{parseFloat(asset.wdvMarch2022 || "0").toLocaleString('en-IN')}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
+                      <TableCell className="px-2 sm:px-4 lg:px-3">
+                        <Checkbox
+                          checked={selectedAssets.includes(asset.assetTagging)}
+                          onCheckedChange={(checked) =>
+                            handleSelectAsset(asset.assetTagging, checked as boolean)
+                          }
+                          className="h-3 w-3 sm:h-4 sm:w-4"
+                        />
+                      </TableCell>
+                      <TableCell className="px-2 sm:px-4 lg:px-3 text-xs sm:text-sm font-mono">{asset.assetTagging}</TableCell>
+                      <TableCell className="px-2 sm:px-4 lg:px-3 text-xs sm:text-sm hidden md:table-cell">{asset.assetClass || 'N/A'}</TableCell>
+                      <TableCell className="px-2 sm:px-4 lg:px-3 text-xs sm:text-sm hidden lg:table-cell max-w-[120px] truncate">{asset.assetSubClass || 'N/A'}</TableCell>
+                      <TableCell className="px-2 sm:px-4 lg:px-3 text-xs sm:text-sm hidden sm:table-cell max-w-[150px] sm:max-w-[200px] truncate">{asset.description || 'N/A'}</TableCell>
+                      <TableCell className="px-2 sm:px-4 lg:px-3 text-xs sm:text-sm hidden lg:table-cell max-w-[120px] truncate">{asset.location || 'N/A'}</TableCell>
+                      <TableCell className="px-2 sm:px-4 lg:px-3 text-xs sm:text-sm hidden xl:table-cell">₹{parseFloat(asset.originalCost || "0").toLocaleString('en-IN')}</TableCell>
+                      <TableCell className="px-2 sm:px-4 lg:px-3 text-xs sm:text-sm hidden xl:table-cell">₹{parseFloat(asset.wdvMarch2022 || "0").toLocaleString('en-IN')}</TableCell>
+                      <TableCell className="text-right px-2 sm:px-4 lg:px-3 sticky right-0 bg-background">
+                        <div className="flex justify-end gap-1">
                           <Button
                             variant="ghost"
                             size="sm"
@@ -467,15 +572,17 @@ export function AssetList() {
                               setSelectedAsset(asset);
                               setViewDialogOpen(true);
                             }}
+                            className="h-7 w-7 sm:h-8 sm:w-8 p-0"
                           >
-                            <Eye className="h-4 w-4" />
+                            <Eye className="h-3 w-3 sm:h-4 sm:w-4" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => handleShowQR(asset)}
+                            className="h-7 w-7 sm:h-8 sm:w-8 p-0"
                           >
-                            <QrCode className="h-4 w-4" />
+                            <QrCode className="h-3 w-3 sm:h-4 sm:w-4" />
                           </Button>
                           <Button
                             variant="ghost"
@@ -484,8 +591,9 @@ export function AssetList() {
                               setSelectedAsset(asset);
                               setEditDialogOpen(true);
                             }}
+                            className="h-7 w-7 sm:h-8 sm:w-8 p-0 hidden sm:inline-flex"
                           >
-                            <Edit className="h-4 w-4" />
+                            <Edit className="h-3 w-3 sm:h-4 sm:w-4" />
                           </Button>
                           <Button
                             variant="ghost"
@@ -494,8 +602,9 @@ export function AssetList() {
                               setSelectedAsset(asset);
                               setDeleteDialogOpen(true);
                             }}
+                            className="h-7 w-7 sm:h-8 sm:w-8 p-0 hidden sm:inline-flex"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 className="h-3 w-3 sm:h-4 sm:w-4" />
                           </Button>
                         </div>
                       </TableCell>
@@ -648,7 +757,23 @@ export function AssetList() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>Delete</AlertDialogAction>
+            <AlertDialogAction onClick={handleDelete}>Delete Asset</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <AlertDialog open={bulkDeleteDialogOpen} onOpenChange={setBulkDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete {selectedAssets.length} selected asset{selectedAssets.length !== 1 ? 's' : ''}. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleBulkDelete}>Delete {selectedAssets.length} Asset{selectedAssets.length !== 1 ? 's' : ''}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

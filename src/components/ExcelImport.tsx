@@ -5,7 +5,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Upload, FileSpreadsheet, CheckCircle, AlertCircle } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "sonner@2.0.3";
 import { projectId, publicAnonKey } from "../utils/supabase/info";
 import * as XLSX from "xlsx";
 
@@ -253,47 +253,47 @@ export function ExcelImport() {
   };
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-3 sm:p-4 md:p-6 lg:p-4 space-y-3 sm:space-y-4 md:space-y-6 lg:space-y-4">
       <Card>
-        <CardHeader>
-          <CardTitle>Import Assets from Excel</CardTitle>
-          <CardDescription>
+        <CardHeader className="p-3 sm:p-4 md:p-6 lg:p-4">
+          <CardTitle className="text-base sm:text-lg md:text-xl lg:text-lg">Import Assets from Excel</CardTitle>
+          <CardDescription className="text-xs sm:text-sm">
             Upload an Excel file (.xlsx or .xls) containing your asset data
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="p-3 sm:p-4 md:p-6 lg:p-4 space-y-4 sm:space-y-6 lg:space-y-4">
           {/* File Upload */}
-          <div className="space-y-4">
-            <Label htmlFor="file-upload">Select Excel File</Label>
-            <div className="flex items-center gap-4">
+          <div className="space-y-3 sm:space-y-4 lg:space-y-3">
+            <Label htmlFor="file-upload" className="text-xs sm:text-sm">Select Excel File</Label>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4 lg:gap-2">
               <Input
                 id="file-upload"
                 type="file"
                 accept=".xlsx,.xls"
                 onChange={handleFileChange}
-                className="flex-1"
+                className="flex-1 text-xs sm:text-sm h-9 sm:h-10 lg:h-9"
               />
               <Button
                 onClick={handleImport}
                 disabled={!file || importing}
-                className="min-w-[120px]"
+                className="text-xs sm:text-sm h-9 sm:h-10 lg:h-9 w-full sm:w-auto sm:min-w-[120px]"
               >
-                <Upload className="h-4 w-4 mr-2" />
+                <Upload className="h-3 w-3 sm:h-4 sm:w-4 lg:h-3.5 lg:w-3.5 mr-1 sm:mr-2 lg:mr-1.5 shrink-0" />
                 {importing ? "Importing..." : "Import"}
               </Button>
             </div>
           </div>
 
           {/* Instructions */}
-          <Alert>
-            <FileSpreadsheet className="h-4 w-4" />
-            <AlertDescription>
+          <Alert className="p-3 sm:p-4 lg:p-3">
+            <FileSpreadsheet className="h-3 w-3 sm:h-4 sm:w-4 lg:h-3.5 lg:w-3.5 shrink-0" />
+            <AlertDescription className="text-xs sm:text-sm">
               <div className="space-y-2">
                 <p>
                   Your Excel file should contain columns matching the asset management format. The following
                   column names are recognized:
                 </p>
-                <ul className="list-disc list-inside space-y-1 text-sm">
+                <ul className="list-disc list-inside space-y-1 text-xs sm:text-sm">
                   <li>
                     <strong>Asset Tagging</strong> (required) - Unique asset identifier
                   </li>
@@ -347,13 +347,13 @@ export function ExcelImport() {
           {/* Preview */}
           {preview.length > 0 && (
             <div className="space-y-2">
-              <Label>Preview (First 5 rows)</Label>
-              <div className="border rounded-lg overflow-x-auto">
-                <table className="w-full text-sm">
+              <Label className="text-xs sm:text-sm">Preview (First 5 rows)</Label>
+              <div className="border rounded-lg overflow-x-auto -mx-3 sm:mx-0">
+                <table className="w-full text-xs sm:text-sm">
                   <thead className="bg-muted">
                     <tr>
                       {Object.keys(preview[0]).map((key) => (
-                        <th key={key} className="px-4 py-2 text-left whitespace-nowrap">
+                        <th key={key} className="px-2 sm:px-4 lg:px-3 py-1.5 sm:py-2 text-left whitespace-nowrap">
                           {key}
                         </th>
                       ))}
@@ -363,7 +363,7 @@ export function ExcelImport() {
                     {preview.map((row, idx) => (
                       <tr key={idx} className="border-t">
                         {Object.values(row).map((value: any, vidx) => (
-                          <td key={vidx} className="px-4 py-2 whitespace-nowrap">
+                          <td key={vidx} className="px-2 sm:px-4 lg:px-3 py-1.5 sm:py-2 whitespace-nowrap">
                             {String(value)}
                           </td>
                         ))}
@@ -380,24 +380,24 @@ export function ExcelImport() {
       {/* Import Results */}
       {result && (
         <Card>
-          <CardHeader>
-            <CardTitle>Import Results</CardTitle>
+          <CardHeader className="p-3 sm:p-4 md:p-6 lg:p-4">
+            <CardTitle className="text-base sm:text-lg md:text-xl lg:text-lg">Import Results</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="flex items-center gap-3 p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-400" />
+          <CardContent className="p-3 sm:p-4 md:p-6 lg:p-4 space-y-3 sm:space-y-4 lg:space-y-3">
+            <div className="grid gap-3 sm:gap-4 lg:gap-3 grid-cols-1 sm:grid-cols-2">
+              <div className="flex items-center gap-2 sm:gap-3 lg:gap-2.5 p-3 sm:p-4 lg:p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                <CheckCircle className="h-6 w-6 sm:h-8 sm:w-8 lg:h-7 lg:w-7 text-green-600 dark:text-green-400 shrink-0" />
                 <div>
-                  <div className="text-2xl">{result.success}</div>
-                  <div className="text-sm text-muted-foreground">Successfully imported</div>
+                  <div className="text-xl sm:text-2xl lg:text-xl">{result.success}</div>
+                  <div className="text-xs sm:text-sm text-muted-foreground">Successfully imported</div>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/20 rounded-lg">
-                <AlertCircle className="h-8 w-8 text-red-600 dark:text-red-400" />
+              <div className="flex items-center gap-2 sm:gap-3 lg:gap-2.5 p-3 sm:p-4 lg:p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
+                <AlertCircle className="h-6 w-6 sm:h-8 sm:w-8 lg:h-7 lg:w-7 text-red-600 dark:text-red-400 shrink-0" />
                 <div>
-                  <div className="text-2xl">{result.failed}</div>
-                  <div className="text-sm text-muted-foreground">Failed to import</div>
+                  <div className="text-xl sm:text-2xl lg:text-xl">{result.failed}</div>
+                  <div className="text-xs sm:text-sm text-muted-foreground">Failed to import</div>
                 </div>
               </div>
             </div>
@@ -405,14 +405,14 @@ export function ExcelImport() {
             {/* Errors */}
             {result.errors.length > 0 && (
               <div className="space-y-2">
-                <Label>Errors</Label>
-                <div className="border rounded-lg max-h-64 overflow-y-auto">
+                <Label className="text-xs sm:text-sm">Errors</Label>
+                <div className="border rounded-lg max-h-48 sm:max-h-64 overflow-y-auto">
                   {result.errors.map((error, idx) => (
-                    <div key={idx} className="p-3 border-b last:border-0">
-                      <div className="text-sm text-red-600 dark:text-red-400">
+                    <div key={idx} className="p-2 sm:p-3 lg:p-2.5 border-b last:border-0">
+                      <div className="text-xs sm:text-sm text-red-600 dark:text-red-400">
                         {error.error}
                       </div>
-                      <div className="text-xs text-muted-foreground mt-1">
+                      <div className="text-[10px] sm:text-xs text-muted-foreground mt-1 truncate">
                         Asset: {JSON.stringify(error.asset).slice(0, 100)}...
                       </div>
                     </div>

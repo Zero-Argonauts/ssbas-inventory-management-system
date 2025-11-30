@@ -156,21 +156,21 @@ export function Dashboard() {
                 </p>
               ) : (
                 Object.entries(stats.byAssetClass)
-                  .sort(([, a], [, b]) => (b as number) - (a as number))
+                  .sort(([, a], [, b]) => b - a)
                   .map(([assetClass, count]) => (
                     <div key={assetClass} className="flex items-center justify-between">
                       <div className="flex-1">
                         <div className="flex items-center justify-between mb-1">
                           <span>{assetClass}</span>
                           <span className="text-sm text-muted-foreground">
-                            {count as number} ({Math.round(((count as number) / stats.totalAssets) * 100)}%)
+                            {count} ({Math.round((count / stats.totalAssets) * 100)}%)
                           </span>
                         </div>
                         <div className="w-full bg-muted rounded-full h-2">
                           <div
                             className="bg-primary h-2 rounded-full transition-all"
                             style={{
-                              width: `${((count as number) / stats.totalAssets) * 100}%`,
+                              width: `${(count / stats.totalAssets) * 100}%`,
                             }}
                           ></div>
                         </div>
@@ -195,7 +195,7 @@ export function Dashboard() {
                 </p>
               ) : (
                 Object.entries(stats.byLocation)
-                  .sort(([, a], [, b]) => (b as number) - (a as number))
+                  .sort(([, a], [, b]) => b - a)
                   .slice(0, 6)
                   .map(([location, count]) => {
                     return (
@@ -204,14 +204,14 @@ export function Dashboard() {
                           <div className="flex items-center justify-between mb-1">
                             <span className="truncate">{location}</span>
                             <span className="text-sm text-muted-foreground ml-2">
-                              {count as number} ({Math.round(((count as number) / stats.totalAssets) * 100)}%)
+                              {count} ({Math.round((count / stats.totalAssets) * 100)}%)
                             </span>
                           </div>
                           <div className="w-full bg-muted rounded-full h-2">
                             <div
                               className="bg-blue-500 h-2 rounded-full transition-all"
                               style={{
-                                width: `${((count as number) / stats.totalAssets) * 100}%`,
+                                width: `${(count / stats.totalAssets) * 100}%`,
                               }}
                             ></div>
                           </div>
@@ -238,7 +238,7 @@ export function Dashboard() {
                 No recent updates
               </p>
             ) : (
-              stats.recentUpdates.map((asset: any) => (
+              stats.recentUpdates.map((asset) => (
                 <div
                   key={asset.assetTagging}
                   className="flex items-center justify-between border-b pb-3 last:border-0"

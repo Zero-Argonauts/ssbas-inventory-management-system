@@ -4,7 +4,7 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Camera, Search, X } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "sonner@2.0.3";
 import { projectId, publicAnonKey } from "../utils/supabase/info";
 import { Html5Qrcode } from "html5-qrcode";
 
@@ -88,7 +88,7 @@ export function QRScanner() {
           fetchAsset(decodedText);
           stopScanning();
         },
-        (_errorMessage) => {
+        (errorMessage) => {
           // Scanning in progress, errors here are normal
         }
       );
@@ -129,27 +129,27 @@ export function QRScanner() {
   }, []);
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-3 sm:p-4 md:p-6 lg:p-4 space-y-3 sm:space-y-4 md:space-y-6 lg:space-y-4">
       <Card>
-        <CardHeader>
-          <CardTitle>Scan QR Code</CardTitle>
-          <CardDescription>
+        <CardHeader className="p-3 sm:p-4 md:p-6 lg:p-4">
+          <CardTitle className="text-base sm:text-lg md:text-xl lg:text-lg">Scan QR Code</CardTitle>
+          <CardDescription className="text-xs sm:text-sm">
             Scan an asset QR code or manually enter the asset tagging code to view details
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="p-3 sm:p-4 md:p-6 lg:p-4 space-y-4 sm:space-y-6 lg:space-y-4">
           {/* Camera Scanner */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <Label>Camera Scanner</Label>
+          <div className="space-y-3 sm:space-y-4 lg:space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
+              <Label className="text-xs sm:text-sm">Camera Scanner</Label>
               {scanning ? (
-                <Button onClick={stopScanning} variant="destructive" size="sm">
-                  <X className="h-4 w-4 mr-2" />
+                <Button onClick={stopScanning} variant="destructive" size="sm" className="text-xs sm:text-sm h-8 sm:h-9 lg:h-8 w-full sm:w-auto">
+                  <X className="h-3 w-3 sm:h-4 sm:w-4 lg:h-3.5 lg:w-3.5 mr-1 sm:mr-2 lg:mr-1.5 shrink-0" />
                   Stop Scanning
                 </Button>
               ) : (
-                <Button onClick={startScanning} size="sm">
-                  <Camera className="h-4 w-4 mr-2" />
+                <Button onClick={startScanning} size="sm" className="text-xs sm:text-sm h-8 sm:h-9 lg:h-8 w-full sm:w-auto">
+                  <Camera className="h-3 w-3 sm:h-4 sm:w-4 lg:h-3.5 lg:w-3.5 mr-1 sm:mr-2 lg:mr-1.5 shrink-0" />
                   Start Camera
                 </Button>
               )}
@@ -162,16 +162,16 @@ export function QRScanner() {
             ></div>
 
             {cameraError && (
-              <div className="p-4 bg-destructive/10 text-destructive rounded-lg text-sm">
+              <div className="p-3 sm:p-4 lg:p-3 bg-destructive/10 text-destructive rounded-lg text-xs sm:text-sm">
                 {cameraError}
               </div>
             )}
           </div>
 
           {/* Manual Entry */}
-          <div className="space-y-4 pt-4 border-t">
-            <Label>Manual Asset Tagging Entry</Label>
-            <div className="flex gap-2">
+          <div className="space-y-3 sm:space-y-4 lg:space-y-3 pt-3 sm:pt-4 lg:pt-3 border-t">
+            <Label className="text-xs sm:text-sm">Manual Asset Tagging Entry</Label>
+            <div className="flex flex-col sm:flex-row gap-2">
               <Input
                 placeholder="Enter asset tagging (e.g., /3B-26/01)"
                 value={manualCode}
@@ -181,9 +181,10 @@ export function QRScanner() {
                     handleManualSearch();
                   }
                 }}
+                className="text-xs sm:text-sm h-9 sm:h-10 lg:h-9 flex-1"
               />
-              <Button onClick={handleManualSearch} disabled={!manualCode.trim() || loading}>
-                <Search className="h-4 w-4 mr-2" />
+              <Button onClick={handleManualSearch} disabled={!manualCode.trim() || loading} className="text-xs sm:text-sm h-9 sm:h-10 lg:h-9 w-full sm:w-auto">
+                <Search className="h-3 w-3 sm:h-4 sm:w-4 lg:h-3.5 lg:w-3.5 mr-1 sm:mr-2 lg:mr-1.5 shrink-0" />
                 Search
               </Button>
             </div>
@@ -194,94 +195,94 @@ export function QRScanner() {
       {/* Asset Details */}
       {loading && (
         <Card>
-          <CardContent className="py-12">
-            <div className="text-center text-muted-foreground">Loading asset details...</div>
+          <CardContent className="py-8 sm:py-12 lg:py-8 p-3 sm:p-4 md:p-6 lg:p-4">
+            <div className="text-center text-muted-foreground text-xs sm:text-sm">Loading asset details...</div>
           </CardContent>
         </Card>
       )}
 
       {asset && !loading && (
         <Card>
-          <CardHeader>
-            <CardTitle>Asset Information</CardTitle>
-            <CardDescription>Details for {asset.assetTagging}</CardDescription>
+          <CardHeader className="p-3 sm:p-4 md:p-6 lg:p-4">
+            <CardTitle className="text-base sm:text-lg md:text-xl lg:text-lg">Asset Information</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">Details for {asset.assetTagging}</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-6">
-              <div className="grid gap-4 md:grid-cols-2">
+          <CardContent className="p-3 sm:p-4 md:p-6 lg:p-4">
+            <div className="space-y-4 sm:space-y-6 lg:space-y-4">
+              <div className="grid gap-3 sm:gap-4 lg:gap-3 grid-cols-1 sm:grid-cols-2">
                 <div>
-                  <div className="text-sm text-muted-foreground">Asset Tagging</div>
-                  <div>{asset.assetTagging}</div>
+                  <div className="text-xs sm:text-sm text-muted-foreground">Asset Tagging</div>
+                  <div className="text-xs sm:text-sm">{asset.assetTagging}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-muted-foreground">Asset Class</div>
-                  <div>{asset.assetClass || 'N/A'}</div>
+                  <div className="text-xs sm:text-sm text-muted-foreground">Asset Class</div>
+                  <div className="text-xs sm:text-sm">{asset.assetClass || 'N/A'}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-muted-foreground">Asset Sub Class</div>
-                  <div>{asset.assetSubClass || 'N/A'}</div>
+                  <div className="text-xs sm:text-sm text-muted-foreground">Asset Sub Class</div>
+                  <div className="text-xs sm:text-sm">{asset.assetSubClass || 'N/A'}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-muted-foreground">Description</div>
-                  <div>{asset.description || 'N/A'}</div>
+                  <div className="text-xs sm:text-sm text-muted-foreground">Description</div>
+                  <div className="text-xs sm:text-sm">{asset.description || 'N/A'}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-muted-foreground">Date of Purchase</div>
-                  <div>{asset.dateOfPurchase || 'N/A'}</div>
+                  <div className="text-xs sm:text-sm text-muted-foreground">Date of Purchase</div>
+                  <div className="text-xs sm:text-sm">{asset.dateOfPurchase || 'N/A'}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-muted-foreground">Tax Invoice</div>
-                  <div>{asset.taxInvoice || 'N/A'}</div>
+                  <div className="text-xs sm:text-sm text-muted-foreground">Tax Invoice</div>
+                  <div className="text-xs sm:text-sm">{asset.taxInvoice || 'N/A'}</div>
                 </div>
-                <div className="col-span-2">
-                  <div className="text-sm text-muted-foreground">Vendors/Suppliers Name & Address</div>
-                  <div>{asset.vendorsSuppliers || 'N/A'}</div>
-                </div>
-                <div>
-                  <div className="text-sm text-muted-foreground">Location</div>
-                  <div>{asset.location || 'N/A'}</div>
+                <div className="sm:col-span-2">
+                  <div className="text-xs sm:text-sm text-muted-foreground">Vendors/Suppliers Name & Address</div>
+                  <div className="text-xs sm:text-sm">{asset.vendorsSuppliers || 'N/A'}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-muted-foreground">Original Cost</div>
-                  <div>₹{parseFloat(asset.originalCost || "0").toLocaleString('en-IN')}</div>
+                  <div className="text-xs sm:text-sm text-muted-foreground">Location</div>
+                  <div className="text-xs sm:text-sm">{asset.location || 'N/A'}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-muted-foreground">Depreciation Rate</div>
-                  <div>{asset.depreciationRate ? `${asset.depreciationRate}%` : 'N/A'}</div>
+                  <div className="text-xs sm:text-sm text-muted-foreground">Original Cost</div>
+                  <div className="text-xs sm:text-sm">₹{parseFloat(asset.originalCost || "0").toLocaleString('en-IN')}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-muted-foreground">WDV as 31st March 2022</div>
-                  <div>₹{parseFloat(asset.wdvMarch2022 || "0").toLocaleString('en-IN')}</div>
+                  <div className="text-xs sm:text-sm text-muted-foreground">Depreciation Rate</div>
+                  <div className="text-xs sm:text-sm">{asset.depreciationRate ? `${asset.depreciationRate}%` : 'N/A'}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-muted-foreground">Transferred/Disposal Details</div>
-                  <div>{asset.transferredDisposalDetails || 'N/A'}</div>
+                  <div className="text-xs sm:text-sm text-muted-foreground">WDV as 31st March 2022</div>
+                  <div className="text-xs sm:text-sm">₹{parseFloat(asset.wdvMarch2022 || "0").toLocaleString('en-IN')}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-muted-foreground">Valuation at Transfer/Disposal</div>
-                  <div>{asset.valuationAtTransfer ? `₹${parseFloat(asset.valuationAtTransfer).toLocaleString('en-IN')}` : 'N/A'}</div>
+                  <div className="text-xs sm:text-sm text-muted-foreground">Transferred/Disposal Details</div>
+                  <div className="text-xs sm:text-sm">{asset.transferredDisposalDetails || 'N/A'}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-muted-foreground">Scrap Value Realised</div>
-                  <div>{asset.scrapValueRealised ? `₹${parseFloat(asset.scrapValueRealised).toLocaleString('en-IN')}` : 'N/A'}</div>
+                  <div className="text-xs sm:text-sm text-muted-foreground">Valuation at Transfer/Disposal</div>
+                  <div className="text-xs sm:text-sm">{asset.valuationAtTransfer ? `₹${parseFloat(asset.valuationAtTransfer).toLocaleString('en-IN')}` : 'N/A'}</div>
+                </div>
+                <div>
+                  <div className="text-xs sm:text-sm text-muted-foreground">Scrap Value Realised</div>
+                  <div className="text-xs sm:text-sm">{asset.scrapValueRealised ? `₹${parseFloat(asset.scrapValueRealised).toLocaleString('en-IN')}` : 'N/A'}</div>
                 </div>
               </div>
 
               {asset.remarks && (
                 <div>
-                  <div className="text-sm text-muted-foreground mb-2">Remarks & Authorised Signatory</div>
-                  <div className="p-4 bg-muted rounded-lg">{asset.remarks}</div>
+                  <div className="text-xs sm:text-sm text-muted-foreground mb-2">Remarks & Authorised Signatory</div>
+                  <div className="p-3 sm:p-4 lg:p-3 bg-muted rounded-lg text-xs sm:text-sm">{asset.remarks}</div>
                 </div>
               )}
 
-              <div className="grid gap-4 md:grid-cols-2 pt-4 border-t">
+              <div className="grid gap-3 sm:gap-4 lg:gap-3 grid-cols-1 sm:grid-cols-2 pt-3 sm:pt-4 lg:pt-3 border-t">
                 <div>
-                  <div className="text-sm text-muted-foreground">Created At</div>
-                  <div className="text-sm">{new Date(asset.createdAt).toLocaleString()}</div>
+                  <div className="text-xs sm:text-sm text-muted-foreground">Created At</div>
+                  <div className="text-xs sm:text-sm">{new Date(asset.createdAt).toLocaleString()}</div>
                 </div>
                 <div>
-                  <div className="text-sm text-muted-foreground">Last Updated</div>
-                  <div className="text-sm">{new Date(asset.updatedAt).toLocaleString()}</div>
+                  <div className="text-xs sm:text-sm text-muted-foreground">Last Updated</div>
+                  <div className="text-xs sm:text-sm">{new Date(asset.updatedAt).toLocaleString()}</div>
                 </div>
               </div>
             </div>
