@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from "./ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 import { projectId, publicAnonKey } from "../utils/supabase/info";
 
 interface AssetFormProps {
@@ -23,21 +23,23 @@ interface AssetFormProps {
 export function AssetForm({ assetTagging, onSuccess, onCancel }: AssetFormProps) {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    assetTagging: "",
+    srNo: "",
     assetClass: "",
     assetSubClass: "",
     description: "",
-    dateOfPurchase: "",
-    taxInvoice: "",
-    vendorsSuppliers: "",
+    assetTagging: "",
+    serialNumber: "",
     location: "",
+    dateOfPurchase: "",
+    taxInvoiceNo: "",
+    vendorSupplierNameAddress: "",
     originalCost: "",
     depreciationRate: "",
-    wdvMarch2022: "",
+    wdvAsMarch31: "",
     transferredDisposalDetails: "",
-    valuationAtTransfer: "",
+    valuationAtTransferDisposal: "",
     scrapValueRealised: "",
-    remarks: "",
+    remarksAuthorisedSignatory: "",
   });
 
   const isEditMode = !!assetTagging;
@@ -76,7 +78,6 @@ export function AssetForm({ assetTagging, onSuccess, onCancel }: AssetFormProps)
     setLoading(true);
 
     try {
-      // URL-encode the asset tagging to handle special characters like slashes
       const url = isEditMode
         ? `https://${projectId}.supabase.co/functions/v1/make-server-8862d32b/assets/${encodeURIComponent(assetTagging)}`
         : `https://${projectId}.supabase.co/functions/v1/make-server-8862d32b/assets`;
@@ -111,14 +112,65 @@ export function AssetForm({ assetTagging, onSuccess, onCancel }: AssetFormProps)
   };
 
   return (
-    <Card>
-      <CardHeader className="p-3 sm:p-4 md:p-6 lg:p-4">
-        <CardTitle className="text-base sm:text-lg md:text-xl lg:text-lg">{isEditMode ? "Edit Asset" : "Add New Asset"}</CardTitle>
-      </CardHeader>
-      <CardContent className="p-3 sm:p-4 md:p-6 lg:p-4">
+    <>
+      {/* Ensure React is in scope for JSX (typically: import React from "react") */}
+      <Card>
+        <CardHeader className="p-3 sm:p-4 md:p-6 lg:p-4">
+          <CardTitle className="text-base sm:text-lg md:text-xl lg:text-lg">
+            {isEditMode ? "Edit Asset" : "Add New Asset"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-3 sm:p-4 md:p-6 lg:p-4">
         <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6 lg:space-y-4">
           <div className="grid gap-4 sm:gap-6 lg:gap-4 grid-cols-1 md:grid-cols-2">
-            {/* Asset Tagging */}
+            <div className="space-y-2">
+              <Label htmlFor="srNo" className="text-xs sm:text-sm">
+                Sr No.
+              </Label>
+              <Input
+                id="srNo"
+                value={formData.srNo}
+                onChange={(e) => handleChange("srNo", e.target.value)}
+                placeholder="e.g., 1"
+                className="text-xs sm:text-sm h-9 sm:h-10 lg:h-9"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="assetClass" className="text-xs sm:text-sm">
+                Asset Class / (BLOCK NO as per IT)
+              </Label>
+              <Input
+                id="assetClass"
+                value={formData.assetClass}
+                onChange={(e) => handleChange("assetClass", e.target.value)}
+                placeholder="e.g., Computer, Furniture, Equipment"
+                className="text-xs sm:text-sm h-9 sm:h-10 lg:h-9"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="assetSubClass" className="text-xs sm:text-sm">Asset Sub Class</Label>
+              <Input
+                id="assetSubClass"
+                value={formData.assetSubClass}
+                onChange={(e) => handleChange("assetSubClass", e.target.value)}
+                placeholder="e.g., Laboratory Level, Meter, Digital"
+                className="text-xs sm:text-sm h-9 sm:h-10 lg:h-9"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="description" className="text-xs sm:text-sm">Description</Label>
+              <Input
+                id="description"
+                value={formData.description}
+                onChange={(e) => handleChange("description", e.target.value)}
+                placeholder="e.g., Transfer from 3B-AS/M-FY5 SKSC"
+                className="text-xs sm:text-sm h-9 sm:h-10 lg:h-9"
+              />
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="assetTagging" className="text-xs sm:text-sm">
                 Asset Tagging <span className="text-red-500">*</span>
@@ -134,90 +186,17 @@ export function AssetForm({ assetTagging, onSuccess, onCancel }: AssetFormProps)
               />
             </div>
 
-            {/* Asset Class */}
             <div className="space-y-2">
-              <Label htmlFor="assetClass" className="text-xs sm:text-sm">
-                Asset Class / (BLOCK NO as per IT)
-              </Label>
-              <Select
-                value={formData.assetClass}
-                onValueChange={(value) => handleChange("assetClass", value)}
-              >
-                <SelectTrigger className="text-xs sm:text-sm h-9 sm:h-10 lg:h-9">
-                  <SelectValue placeholder="Select asset class" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Machine">Machine</SelectItem>
-                  <SelectItem value="Furniture">Furniture</SelectItem>
-                  <SelectItem value="Vehicle">Vehicle</SelectItem>
-                  <SelectItem value="Building">Building</SelectItem>
-                  <SelectItem value="Equipment">Equipment</SelectItem>
-                  <SelectItem value="Other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Asset Sub Class */}
-            <div className="space-y-2">
-              <Label htmlFor="assetSubClass" className="text-xs sm:text-sm">Asset Sub Class</Label>
+              <Label htmlFor="serialNumber" className="text-xs sm:text-sm">Serial Number</Label>
               <Input
-                id="assetSubClass"
-                value={formData.assetSubClass}
-                onChange={(e) => handleChange("assetSubClass", e.target.value)}
-                placeholder="e.g., Laboratory Level, Meter, Digital"
+                id="serialNumber"
+                value={formData.serialNumber}
+                onChange={(e) => handleChange("serialNumber", e.target.value)}
+                placeholder="e.g., SN12345678"
                 className="text-xs sm:text-sm h-9 sm:h-10 lg:h-9"
               />
             </div>
 
-            {/* Description */}
-            <div className="space-y-2">
-              <Label htmlFor="description" className="text-xs sm:text-sm">Description</Label>
-              <Input
-                id="description"
-                value={formData.description}
-                onChange={(e) => handleChange("description", e.target.value)}
-                placeholder="e.g., Transfer from 3B-AS/M-FY5 SKSC"
-                className="text-xs sm:text-sm h-9 sm:h-10 lg:h-9"
-              />
-            </div>
-
-            {/* Date of Purchase */}
-            <div className="space-y-2">
-              <Label htmlFor="dateOfPurchase" className="text-xs sm:text-sm">Date of Purchase</Label>
-              <Input
-                id="dateOfPurchase"
-                type="date"
-                value={formData.dateOfPurchase}
-                onChange={(e) => handleChange("dateOfPurchase", e.target.value)}
-                className="text-xs sm:text-sm h-9 sm:h-10 lg:h-9"
-              />
-            </div>
-
-            {/* Tax Invoice */}
-            <div className="space-y-2">
-              <Label htmlFor="taxInvoice" className="text-xs sm:text-sm">Tax Invoice Yes / (If No 23)</Label>
-              <Input
-                id="taxInvoice"
-                value={formData.taxInvoice}
-                onChange={(e) => handleChange("taxInvoice", e.target.value)}
-                placeholder="e.g., 508/23/03/20"
-                className="text-xs sm:text-sm h-9 sm:h-10 lg:h-9"
-              />
-            </div>
-
-            {/* Vendors/Suppliers Name & Address */}
-            <div className="space-y-2">
-              <Label htmlFor="vendorsSuppliers" className="text-xs sm:text-sm">Vendors/Suppliers Name & Address</Label>
-              <Input
-                id="vendorsSuppliers"
-                value={formData.vendorsSuppliers}
-                onChange={(e) => handleChange("vendorsSuppliers", e.target.value)}
-                placeholder="e.g., N.N.Scientific Traders"
-                className="text-xs sm:text-sm h-9 sm:h-10 lg:h-9"
-              />
-            </div>
-
-            {/* Location */}
             <div className="space-y-2">
               <Label htmlFor="location" className="text-xs sm:text-sm">Location</Label>
               <Input
@@ -229,7 +208,39 @@ export function AssetForm({ assetTagging, onSuccess, onCancel }: AssetFormProps)
               />
             </div>
 
-            {/* Original Cost */}
+            <div className="space-y-2">
+              <Label htmlFor="dateOfPurchase" className="text-xs sm:text-sm">Date of Purchase</Label>
+              <Input
+                id="dateOfPurchase"
+                type="date"
+                value={formData.dateOfPurchase}
+                onChange={(e) => handleChange("dateOfPurchase", e.target.value)}
+                className="text-xs sm:text-sm h-9 sm:h-10 lg:h-9"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="taxInvoiceNo" className="text-xs sm:text-sm">Tax Invoice No. / (File No.)</Label>
+              <Input
+                id="taxInvoiceNo"
+                value={formData.taxInvoiceNo}
+                onChange={(e) => handleChange("taxInvoiceNo", e.target.value)}
+                placeholder="e.g., 508/23/03/20"
+                className="text-xs sm:text-sm h-9 sm:h-10 lg:h-9"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="vendorSupplierNameAddress" className="text-xs sm:text-sm">Vendor / Supplier Name & Address</Label>
+              <Input
+                id="vendorSupplierNameAddress"
+                value={formData.vendorSupplierNameAddress}
+                onChange={(e) => handleChange("vendorSupplierNameAddress", e.target.value)}
+                placeholder="e.g., N.N.Scientific Traders"
+                className="text-xs sm:text-sm h-9 sm:h-10 lg:h-9"
+              />
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="originalCost" className="text-xs sm:text-sm">Original Cost</Label>
               <Input
@@ -238,12 +249,11 @@ export function AssetForm({ assetTagging, onSuccess, onCancel }: AssetFormProps)
                 step="0.01"
                 value={formData.originalCost}
                 onChange={(e) => handleChange("originalCost", e.target.value)}
-                placeholder="e.g., 9,500.00"
+                placeholder="e.g., 9500.00"
                 className="text-xs sm:text-sm h-9 sm:h-10 lg:h-9"
               />
             </div>
 
-            {/* Depreciation Rate */}
             <div className="space-y-2">
               <Label htmlFor="depreciationRate" className="text-xs sm:text-sm">Depreciation Rate (%)</Label>
               <Input
@@ -257,23 +267,21 @@ export function AssetForm({ assetTagging, onSuccess, onCancel }: AssetFormProps)
               />
             </div>
 
-            {/* WDV as 31st March 2022 */}
             <div className="space-y-2">
-              <Label htmlFor="wdvMarch2022" className="text-xs sm:text-sm">WDV as 31st March 2022</Label>
+              <Label htmlFor="wdvAsMarch31" className="text-xs sm:text-sm">WDV as on 31st March</Label>
               <Input
-                id="wdvMarch2022"
+                id="wdvAsMarch31"
                 type="number"
                 step="0.01"
-                value={formData.wdvMarch2022}
-                onChange={(e) => handleChange("wdvMarch2022", e.target.value)}
-                placeholder="e.g., 8,075.00"
+                value={formData.wdvAsMarch31}
+                onChange={(e) => handleChange("wdvAsMarch31", e.target.value)}
+                placeholder="e.g., 8075.00"
                 className="text-xs sm:text-sm h-9 sm:h-10 lg:h-9"
               />
             </div>
 
-            {/* Transferred/Disposal details */}
             <div className="space-y-2">
-              <Label htmlFor="transferredDisposalDetails" className="text-xs sm:text-sm">Transferred/Disposal Details</Label>
+              <Label htmlFor="transferredDisposalDetails" className="text-xs sm:text-sm">Transferred / Disposal Details</Label>
               <Input
                 id="transferredDisposalDetails"
                 value={formData.transferredDisposalDetails}
@@ -283,21 +291,19 @@ export function AssetForm({ assetTagging, onSuccess, onCancel }: AssetFormProps)
               />
             </div>
 
-            {/* Valuation at time of Transfer/Disposal */}
             <div className="space-y-2">
-              <Label htmlFor="valuationAtTransfer" className="text-xs sm:text-sm">Valuation at Time of Transfer/Disposal</Label>
+              <Label htmlFor="valuationAtTransferDisposal" className="text-xs sm:text-sm">Valuation at Time of Transfer / Disposal</Label>
               <Input
-                id="valuationAtTransfer"
+                id="valuationAtTransferDisposal"
                 type="number"
                 step="0.01"
-                value={formData.valuationAtTransfer}
-                onChange={(e) => handleChange("valuationAtTransfer", e.target.value)}
+                value={formData.valuationAtTransferDisposal}
+                onChange={(e) => handleChange("valuationAtTransferDisposal", e.target.value)}
                 placeholder="Valuation amount"
                 className="text-xs sm:text-sm h-9 sm:h-10 lg:h-9"
               />
             </div>
 
-            {/* Scrap Value realised */}
             <div className="space-y-2">
               <Label htmlFor="scrapValueRealised" className="text-xs sm:text-sm">Scrap Value Realised</Label>
               <Input
@@ -312,13 +318,12 @@ export function AssetForm({ assetTagging, onSuccess, onCancel }: AssetFormProps)
             </div>
           </div>
 
-          {/* Remarks & Authorised Signatory */}
           <div className="space-y-2">
-            <Label htmlFor="remarks" className="text-xs sm:text-sm">Remarks & Authorised Signatory</Label>
+            <Label htmlFor="remarksAuthorisedSignatory" className="text-xs sm:text-sm">Remarks & Authorised Signatory</Label>
             <Textarea
-              id="remarks"
-              value={formData.remarks}
-              onChange={(e) => handleChange("remarks", e.target.value)}
+              id="remarksAuthorisedSignatory"
+              value={formData.remarksAuthorisedSignatory}
+              onChange={(e) => handleChange("remarksAuthorisedSignatory", e.target.value)}
               placeholder="Additional remarks and authorized signatory details..."
               rows={3}
               className="text-xs sm:text-sm"
@@ -338,5 +343,6 @@ export function AssetForm({ assetTagging, onSuccess, onCancel }: AssetFormProps)
         </form>
       </CardContent>
     </Card>
+    </>
   );
 }

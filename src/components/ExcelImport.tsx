@@ -1,11 +1,11 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Alert, AlertDescription } from "./ui/alert";
 import { Upload, FileSpreadsheet, CheckCircle, AlertCircle } from "lucide-react";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 import { projectId, publicAnonKey } from "../utils/supabase/info";
 import * as XLSX from "xlsx";
 
@@ -38,7 +38,6 @@ export function ExcelImport() {
       const sheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json(sheet);
 
-      // Show preview of first 5 rows
       setPreview(jsonData.slice(0, 5));
     } catch (error) {
       console.error("Error parsing Excel file:", error);
@@ -47,37 +46,37 @@ export function ExcelImport() {
   };
 
   const normalizeAssetData = (row: any): any => {
-    // First, log the actual column names to help debug
     console.log("Excel row columns:", Object.keys(row));
     console.log("Excel row data:", row);
     
-    // Create a normalized version of column names for case-insensitive matching
     const normalizedRow: any = {};
     for (const [key, value] of Object.entries(row)) {
-      // Normalize: trim whitespace, convert to lowercase, remove extra spaces
       const normalizedKey = key.toString().trim().toLowerCase().replace(/\s+/g, ' ');
       normalizedRow[normalizedKey] = value;
     }
     
     console.log("Normalized columns:", Object.keys(normalizedRow));
     
-    // Map various possible column names to our standard format
     const mapping: Record<string, string[]> = {
-      assetTagging: [
-        "asset tagging",
-        "assettagging", 
-        "asset_tagging",
-        "asset tag",
-        "assettag",
-        "tagging"
+      srNo: [
+        "sr no",
+        "sr no.",
+        "srno",
+        "sr_no",
+        "serial no",
+        "s.no",
+        "s no",
+        "sno"
       ],
       assetClass: [
+        "asset class / (block no as per it)",
         "asset class / (block no as per it)",
         "asset class",
         "assetclass",
         "asset_class",
         "class",
-        "block no"
+        "block no",
+        "block no as per it"
       ],
       assetSubClass: [
         "asset sub class",
@@ -87,26 +86,59 @@ export function ExcelImport() {
         "sub class",
         "subclass"
       ],
-      description: ["description", "desc"],
+      description: [
+        "description", 
+        "desc"
+      ],
+      assetTagging: [
+        "asset tagging",
+        "assettagging", 
+        "asset_tagging",
+        "asset tag",
+        "assettag",
+        "tagging"
+      ],
+      serialNumber: [
+        "serial number",
+        "serialnumber",
+        "serial_number",
+        "serial no",
+        "serial no.",
+        "sn"
+      ],
+      location: [
+        "location",
+        "loc"
+      ],
       dateOfPurchase: [
         "date of purchase",
         "dateofpurchase",
         "date_of_purchase",
         "purchase_date",
         "purchasedate",
+        "purchase date",
         "date"
       ],
-      taxInvoice: [
+      taxInvoiceNo: [
+        "tax invoice no. / (file no.)",
+        "tax invoice no / (file no)",
+        "tax invoice no.",
+        "tax invoice no",
         "tax invoice yes / (if no 23)",
         "tax invoice",
         "taxinvoice",
         "tax_invoice",
-        "invoice"
+        "invoice no",
+        "invoice",
+        "file no"
       ],
-      vendorsSuppliers: [
+      vendorSupplierNameAddress: [
+        "vendor / supplier name & address",
+        "vendor supplier name & address",
         "vendors/ suppliers name & address",
         "vendors/suppliers name & address",
         "vendors suppliers name & address",
+        "vendor supplier name address",
         "vendorssuppliers",
         "vendors_suppliers",
         "vendor",
@@ -114,7 +146,6 @@ export function ExcelImport() {
         "vendors",
         "suppliers"
       ],
-      location: ["location"],
       originalCost: [
         "original cost",
         "originalcost",
@@ -127,22 +158,27 @@ export function ExcelImport() {
         "depreciation_rate",
         "depreciation"
       ],
-      wdvMarch2022: [
+      wdvAsMarch31: [
+        "wdv as on 31st march",
         "wdv as 31st march 2022",
         "wdv as 31 march 2022",
+        "wdv as on 31st march 2022",
         "wdv",
         "wdvmarch2022",
         "wdv_march_2022"
       ],
       transferredDisposalDetails: [
+        "transferred / disposal details",
         "transferred/ disposal details",
         "transferred/disposal details",
         "transferred disposal details",
         "transferreddisposaldetails",
         "transferred_disposal_details",
+        "disposal details",
         "disposal"
       ],
-      valuationAtTransfer: [
+      valuationAtTransferDisposal: [
+        "valuation at time of transfer / disposal",
         "valuation at time of transfer/ disposal",
         "valuation at time of transfer/disposal",
         "valuation at transfer",
@@ -158,9 +194,11 @@ export function ExcelImport() {
         "scrap_value",
         "scrap value"
       ],
-      remarks: [
+      remarksAuthorisedSignatory: [
         "remarks & authorised signatory",
         "remarks and authorised signatory",
+        "remarks & authorized signatory",
+        "remarks and authorized signatory",
         "remarks",
         "notes",
         "comments"
@@ -175,11 +213,9 @@ export function ExcelImport() {
         if (normalizedRow[normalizedName] !== undefined && 
             normalizedRow[normalizedName] !== null && 
             normalizedRow[normalizedName] !== "") {
-          // Convert to string and handle special cases
           let value = String(normalizedRow[normalizedName]).trim();
           
-          // Remove commas from numeric values
-          if (["originalCost", "wdvMarch2022", "valuationAtTransfer", "scrapValueRealised", "depreciationRate"].includes(key)) {
+          if (["originalCost", "wdvAsMarch31", "valuationAtTransferDisposal", "scrapValueRealised", "depreciationRate"].includes(key)) {
             value = value.replace(/,/g, "");
           }
           
@@ -209,13 +245,11 @@ export function ExcelImport() {
 
       console.log("Total rows to import:", jsonData.length);
       
-      // Show the actual column names from the first row
       if (jsonData.length > 0) {
         console.log("Excel columns detected:", Object.keys(jsonData[0]));
         toast.info(`Found ${jsonData.length} rows with columns: ${Object.keys(jsonData[0]).join(", ")}`);
       }
 
-      // Normalize and prepare asset data
       const assets = jsonData.map((row, index) => {
         console.log(`Processing row ${index + 1}:`, row);
         return normalizeAssetData(row);
@@ -223,7 +257,6 @@ export function ExcelImport() {
 
       console.log("Normalized assets to import:", assets);
 
-      // Send to server
       const response = await fetch(
         `https://${projectId}.supabase.co/functions/v1/make-server-8862d32b/assets/bulk-import`,
         {
@@ -262,7 +295,6 @@ export function ExcelImport() {
           </CardDescription>
         </CardHeader>
         <CardContent className="p-3 sm:p-4 md:p-6 lg:p-4 space-y-4 sm:space-y-6 lg:space-y-4">
-          {/* File Upload */}
           <div className="space-y-3 sm:space-y-4 lg:space-y-3">
             <Label htmlFor="file-upload" className="text-xs sm:text-sm">Select Excel File</Label>
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4 lg:gap-2">
@@ -284,7 +316,6 @@ export function ExcelImport() {
             </div>
           </div>
 
-          {/* Instructions */}
           <Alert className="p-3 sm:p-4 lg:p-3">
             <FileSpreadsheet className="h-3 w-3 sm:h-4 sm:w-4 lg:h-3.5 lg:w-3.5 shrink-0" />
             <AlertDescription className="text-xs sm:text-sm">
@@ -295,7 +326,7 @@ export function ExcelImport() {
                 </p>
                 <ul className="list-disc list-inside space-y-1 text-xs sm:text-sm">
                   <li>
-                    <strong>Asset Tagging</strong> (required) - Unique asset identifier
+                    <strong>Sr No.</strong> - Serial number
                   </li>
                   <li>
                     <strong>Asset Class / (BLOCK NO as per IT)</strong> - Classification
@@ -307,16 +338,22 @@ export function ExcelImport() {
                     <strong>Description</strong> - Asset description
                   </li>
                   <li>
-                    <strong>Date of Purchase</strong> - Purchase date
+                    <strong>Asset Tagging</strong> (required) - Unique asset identifier
                   </li>
                   <li>
-                    <strong>Tax Invoice Yes / (If No 23)</strong> - Invoice details
-                  </li>
-                  <li>
-                    <strong>Vendors/Suppliers Name & Address</strong> - Supplier information
+                    <strong>Serial Number</strong> - Manufacturer's serial number
                   </li>
                   <li>
                     <strong>Location</strong> - Physical location
+                  </li>
+                  <li>
+                    <strong>Date of Purchase</strong> - Purchase date
+                  </li>
+                  <li>
+                    <strong>Tax Invoice No. / (File No.)</strong> - Invoice or file number
+                  </li>
+                  <li>
+                    <strong>Vendor / Supplier Name & Address</strong> - Supplier information
                   </li>
                   <li>
                     <strong>Original Cost</strong> - Purchase cost
@@ -325,16 +362,16 @@ export function ExcelImport() {
                     <strong>Depreciation Rate</strong> - Depreciation percentage
                   </li>
                   <li>
-                    <strong>WDV as 31st March 2022</strong> - Written down value
+                    <strong>WDV as on 31st March</strong> - Written down value
                   </li>
                   <li>
-                    <strong>Transferred/Disposal details</strong> - Transfer/disposal info
+                    <strong>Transferred / Disposal Details</strong> - Transfer/disposal info
                   </li>
                   <li>
-                    <strong>Valuation at time of Transfer/Disposal</strong> - Valuation amount
+                    <strong>Valuation at Time of Transfer / Disposal</strong> - Valuation amount
                   </li>
                   <li>
-                    <strong>Scrap Value realised</strong> - Scrap value
+                    <strong>Scrap Value Realised</strong> - Scrap value
                   </li>
                   <li>
                     <strong>Remarks & Authorised Signatory</strong> - Additional notes
@@ -344,7 +381,6 @@ export function ExcelImport() {
             </AlertDescription>
           </Alert>
 
-          {/* Preview */}
           {preview.length > 0 && (
             <div className="space-y-2">
               <Label className="text-xs sm:text-sm">Preview (First 5 rows)</Label>
@@ -377,7 +413,6 @@ export function ExcelImport() {
         </CardContent>
       </Card>
 
-      {/* Import Results */}
       {result && (
         <Card>
           <CardHeader className="p-3 sm:p-4 md:p-6 lg:p-4">
@@ -402,7 +437,6 @@ export function ExcelImport() {
               </div>
             </div>
 
-            {/* Errors */}
             {result.errors.length > 0 && (
               <div className="space-y-2">
                 <Label className="text-xs sm:text-sm">Errors</Label>

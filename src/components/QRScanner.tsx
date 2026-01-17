@@ -1,31 +1,33 @@
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Camera, Search, X } from "lucide-react";
-import { toast } from "sonner@2.0.3";
+import { toast } from "sonner";
 import { projectId, publicAnonKey } from "../utils/supabase/info";
 import { Html5Qrcode } from "html5-qrcode";
 
 interface Asset {
+  srNo?: string;
+  assetClass?: string;
+  assetSubClass?: string;
+  description?: string;
   assetTagging: string;
-  assetClass: string;
-  assetSubClass: string;
-  description: string;
-  dateOfPurchase: string;
-  taxInvoice: string;
-  vendorsSuppliers: string;
-  location: string;
-  originalCost: string;
-  depreciationRate: string;
-  wdvMarch2022: string;
-  transferredDisposalDetails: string;
-  valuationAtTransfer: string;
-  scrapValueRealised: string;
-  remarks: string;
-  createdAt: string;
-  updatedAt: string;
+  serialNumber?: string;
+  location?: string;
+  dateOfPurchase?: string;
+  taxInvoiceNo?: string;
+  vendorSupplierNameAddress?: string;
+  originalCost?: string;
+  depreciationRate?: string;
+  wdvAsMarch31?: string;
+  transferredDisposalDetails?: string;
+  valuationAtTransferDisposal?: string;
+  scrapValueRealised?: string;
+  remarksAuthorisedSignatory?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export function QRScanner() {
@@ -41,7 +43,6 @@ export function QRScanner() {
     setAsset(null);
 
     try {
-      // URL-encode the asset code to handle special characters like slashes
       const encodedCode = encodeURIComponent(code);
       const response = await fetch(
         `https://${projectId}.supabase.co/functions/v1/make-server-8862d32b/assets/${encodedCode}`,
@@ -84,12 +85,11 @@ export function QRScanner() {
           qrbox: { width: 250, height: 250 },
         },
         (decodedText) => {
-          // QR code successfully scanned
           fetchAsset(decodedText);
           stopScanning();
         },
         (errorMessage) => {
-          // Scanning in progress, errors here are normal
+          
         }
       );
 
@@ -121,7 +121,6 @@ export function QRScanner() {
 
   useEffect(() => {
     return () => {
-      // Cleanup on unmount
       if (scannerRef.current) {
         scannerRef.current.stop().catch(console.error);
       }
@@ -138,7 +137,6 @@ export function QRScanner() {
           </CardDescription>
         </CardHeader>
         <CardContent className="p-3 sm:p-4 md:p-6 lg:p-4 space-y-4 sm:space-y-6 lg:space-y-4">
-          {/* Camera Scanner */}
           <div className="space-y-3 sm:space-y-4 lg:space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
               <Label className="text-xs sm:text-sm">Camera Scanner</Label>
@@ -168,7 +166,6 @@ export function QRScanner() {
             )}
           </div>
 
-          {/* Manual Entry */}
           <div className="space-y-3 sm:space-y-4 lg:space-y-3 pt-3 sm:pt-4 lg:pt-3 border-t">
             <Label className="text-xs sm:text-sm">Manual Asset Tagging Entry</Label>
             <div className="flex flex-col sm:flex-row gap-2">
@@ -192,7 +189,6 @@ export function QRScanner() {
         </CardContent>
       </Card>
 
-      {/* Asset Details */}
       {loading && (
         <Card>
           <CardContent className="py-8 sm:py-12 lg:py-8 p-3 sm:p-4 md:p-6 lg:p-4">
@@ -210,6 +206,12 @@ export function QRScanner() {
           <CardContent className="p-3 sm:p-4 md:p-6 lg:p-4">
             <div className="space-y-4 sm:space-y-6 lg:space-y-4">
               <div className="grid gap-3 sm:gap-4 lg:gap-3 grid-cols-1 sm:grid-cols-2">
+                {asset.srNo && (
+                  <div>
+                    <div className="text-xs sm:text-sm text-muted-foreground">Sr No.</div>
+                    <div className="text-xs sm:text-sm">{asset.srNo}</div>
+                  </div>
+                )}
                 <div>
                   <div className="text-xs sm:text-sm text-muted-foreground">Asset Tagging</div>
                   <div className="text-xs sm:text-sm">{asset.assetTagging}</div>
@@ -222,25 +224,31 @@ export function QRScanner() {
                   <div className="text-xs sm:text-sm text-muted-foreground">Asset Sub Class</div>
                   <div className="text-xs sm:text-sm">{asset.assetSubClass || 'N/A'}</div>
                 </div>
-                <div>
+                <div className="sm:col-span-2">
                   <div className="text-xs sm:text-sm text-muted-foreground">Description</div>
                   <div className="text-xs sm:text-sm">{asset.description || 'N/A'}</div>
+                </div>
+                {asset.serialNumber && (
+                  <div>
+                    <div className="text-xs sm:text-sm text-muted-foreground">Serial Number</div>
+                    <div className="text-xs sm:text-sm">{asset.serialNumber}</div>
+                  </div>
+                )}
+                <div>
+                  <div className="text-xs sm:text-sm text-muted-foreground">Location</div>
+                  <div className="text-xs sm:text-sm">{asset.location || 'N/A'}</div>
                 </div>
                 <div>
                   <div className="text-xs sm:text-sm text-muted-foreground">Date of Purchase</div>
                   <div className="text-xs sm:text-sm">{asset.dateOfPurchase || 'N/A'}</div>
                 </div>
                 <div>
-                  <div className="text-xs sm:text-sm text-muted-foreground">Tax Invoice</div>
-                  <div className="text-xs sm:text-sm">{asset.taxInvoice || 'N/A'}</div>
+                  <div className="text-xs sm:text-sm text-muted-foreground">Tax Invoice No. / File No.</div>
+                  <div className="text-xs sm:text-sm">{asset.taxInvoiceNo || 'N/A'}</div>
                 </div>
                 <div className="sm:col-span-2">
-                  <div className="text-xs sm:text-sm text-muted-foreground">Vendors/Suppliers Name & Address</div>
-                  <div className="text-xs sm:text-sm">{asset.vendorsSuppliers || 'N/A'}</div>
-                </div>
-                <div>
-                  <div className="text-xs sm:text-sm text-muted-foreground">Location</div>
-                  <div className="text-xs sm:text-sm">{asset.location || 'N/A'}</div>
+                  <div className="text-xs sm:text-sm text-muted-foreground">Vendor / Supplier Name & Address</div>
+                  <div className="text-xs sm:text-sm">{asset.vendorSupplierNameAddress || 'N/A'}</div>
                 </div>
                 <div>
                   <div className="text-xs sm:text-sm text-muted-foreground">Original Cost</div>
@@ -251,16 +259,16 @@ export function QRScanner() {
                   <div className="text-xs sm:text-sm">{asset.depreciationRate ? `${asset.depreciationRate}%` : 'N/A'}</div>
                 </div>
                 <div>
-                  <div className="text-xs sm:text-sm text-muted-foreground">WDV as 31st March 2022</div>
-                  <div className="text-xs sm:text-sm">₹{parseFloat(asset.wdvMarch2022 || "0").toLocaleString('en-IN')}</div>
+                  <div className="text-xs sm:text-sm text-muted-foreground">WDV as on 31st March</div>
+                  <div className="text-xs sm:text-sm">₹{parseFloat(asset.wdvAsMarch31 || "0").toLocaleString('en-IN')}</div>
                 </div>
                 <div>
-                  <div className="text-xs sm:text-sm text-muted-foreground">Transferred/Disposal Details</div>
+                  <div className="text-xs sm:text-sm text-muted-foreground">Transferred / Disposal Details</div>
                   <div className="text-xs sm:text-sm">{asset.transferredDisposalDetails || 'N/A'}</div>
                 </div>
                 <div>
-                  <div className="text-xs sm:text-sm text-muted-foreground">Valuation at Transfer/Disposal</div>
-                  <div className="text-xs sm:text-sm">{asset.valuationAtTransfer ? `₹${parseFloat(asset.valuationAtTransfer).toLocaleString('en-IN')}` : 'N/A'}</div>
+                  <div className="text-xs sm:text-sm text-muted-foreground">Valuation at Transfer / Disposal</div>
+                  <div className="text-xs sm:text-sm">{asset.valuationAtTransferDisposal ? `₹${parseFloat(asset.valuationAtTransferDisposal).toLocaleString('en-IN')}` : 'N/A'}</div>
                 </div>
                 <div>
                   <div className="text-xs sm:text-sm text-muted-foreground">Scrap Value Realised</div>
@@ -268,21 +276,21 @@ export function QRScanner() {
                 </div>
               </div>
 
-              {asset.remarks && (
+              {asset.remarksAuthorisedSignatory && (
                 <div>
                   <div className="text-xs sm:text-sm text-muted-foreground mb-2">Remarks & Authorised Signatory</div>
-                  <div className="p-3 sm:p-4 lg:p-3 bg-muted rounded-lg text-xs sm:text-sm">{asset.remarks}</div>
+                  <div className="p-3 sm:p-4 lg:p-3 bg-muted rounded-lg text-xs sm:text-sm">{asset.remarksAuthorisedSignatory}</div>
                 </div>
               )}
 
               <div className="grid gap-3 sm:gap-4 lg:gap-3 grid-cols-1 sm:grid-cols-2 pt-3 sm:pt-4 lg:pt-3 border-t">
                 <div>
                   <div className="text-xs sm:text-sm text-muted-foreground">Created At</div>
-                  <div className="text-xs sm:text-sm">{new Date(asset.createdAt).toLocaleString()}</div>
+                  <div className="text-xs sm:text-sm">{asset.createdAt ? new Date(asset.createdAt).toLocaleString() : 'N/A'}</div>
                 </div>
                 <div>
                   <div className="text-xs sm:text-sm text-muted-foreground">Last Updated</div>
-                  <div className="text-xs sm:text-sm">{new Date(asset.updatedAt).toLocaleString()}</div>
+                  <div className="text-xs sm:text-sm">{asset.updatedAt ? new Date(asset.updatedAt).toLocaleString() : 'N/A'}</div>
                 </div>
               </div>
             </div>

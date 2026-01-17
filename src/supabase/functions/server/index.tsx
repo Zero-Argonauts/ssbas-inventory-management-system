@@ -5,10 +5,8 @@ import * as kv from "./kv_store.tsx";
 
 const app = new Hono();
 
-// Enable logger
 app.use('*', logger(console.log));
 
-// Enable CORS for all routes and methods
 app.use(
   "/*",
   cors({
@@ -20,17 +18,109 @@ app.use(
   }),
 );
 
-// Health check endpoint
+interface AssetData {
+  srNo?: string;
+  assetClass?: string;
+  assetSubClass?: string;
+  description?: string;
+  assetTagging: string;
+  serialNumber?: string;
+  location?: string;
+  dateOfPurchase?: string;
+  taxInvoiceNo?: string;
+  vendorSupplierNameAddress?: string;
+  originalCost?: string;
+  depreciationRate?: string;
+  wdvAsMarch31?: string;
+  transferredDisposalDetails?: string;
+  valuationAtTransferDisposal?: string;
+  scrapValueRealised?: string;
+  remarksAuthorisedSignatory?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+function validateAsset(data: any): { valid: boolean; errors: string[]; asset?: AssetData } {
+  const errors: string[] = [];
+  
+  if (!data.assetTagging || String(data.assetTagging).trim() === "") {
+    errors.push("Asset Tagging is required");
+  }
+  
+  const numericFields = [
+    "originalCost",
+    "depreciationRate",
+    "wdvAsMarch31",
+    "valuationAtTransferDisposal",
+    "scrapValueRealised"
+  ];
+  
+  numericFields.forEach(field => {
+    if (data[field] && data[field] !== "") {
+      const value = String(data[field]).replace(/,/g, "");
+      if (isNaN(parseFloat(value))) {
+        errors.push(`${field} must be a valid number`);
+      }
+    }
+  });
+  
+  if (data.dateOfPurchase && data.dateOfPurchase !== "") {
+    const dateStr = String(data.dateOfPurchase);
+    if (!isValidDate(dateStr)) {
+      errors.push("Date of Purchase must be a valid date");
+    }
+  }
+  
+  if (errors.length > 0) {
+    return { valid: false, errors };
+  }
+  
+  const asset: AssetData = {
+    srNo: data.srNo ? String(data.srNo).trim() : "",
+    assetClass: data.assetClass ? String(data.assetClass).trim() : "",
+    assetSubClass: data.assetSubClass ? String(data.assetSubClass).trim() : "",
+    description: data.description ? String(data.description).trim() : "",
+    assetTagging: String(data.assetTagging).trim(),
+    serialNumber: data.serialNumber ? String(data.serialNumber).trim() : "",
+    location: data.location ? String(data.location).trim() : "",
+    dateOfPurchase: data.dateOfPurchase ? String(data.dateOfPurchase).trim() : "",
+    taxInvoiceNo: data.taxInvoiceNo ? String(data.taxInvoiceNo).trim() : "",
+    vendorSupplierNameAddress: data.vendorSupplierNameAddress ? String(data.vendorSupplierNameAddress).trim() : "",
+    originalCost: data.originalCost ? String(data.originalCost).replace(/,/g, "").trim() : "",
+    depreciationRate: data.depreciationRate ? String(data.depreciationRate).replace(/,/g, "").trim() : "",
+    wdvAsMarch31: data.wdvAsMarch31 ? String(data.wdvAsMarch31).replace(/,/g, "").trim() : "",
+    transferredDisposalDetails: data.transferredDisposalDetails ? String(data.transferredDisposalDetails).trim() : "",
+    valuationAtTransferDisposal: data.valuationAtTransferDisposal ? String(data.valuationAtTransferDisposal).replace(/,/g, "").trim() : "",
+    scrapValueRealised: data.scrapValueRealised ? String(data.scrapValueRealised).replace(/,/g, "").trim() : "",
+    remarksAuthorisedSignatory: data.remarksAuthorisedSignatory ? String(data.remarksAuthorisedSignatory).trim() : "",
+  };
+  
+  return { valid: true, errors: [], asset };
+}
+
+function isValidDate(dateStr: string): boolean {
+  const date = new Date(dateStr);
+  if (!isNaN(date.getTime())) {
+    return true;
+  }
+  
+  const patterns = [
+    /^\d{1,2}\/\d{1,2}\/\d{4}$/,
+    /^\d{1,2}-\d{1,2}-\d{4}$/,
+    /^\d{4}-\d{1,2}-\d{1,2}$/,
+  ];
+  
+  return patterns.some(pattern => pattern.test(dateStr));
+}
+
 app.get("/make-server-8862d32b/health", (c) => {
   return c.json({ status: "ok" });
 });
 
-// Get all assets with optional filters
 app.get("/make-server-8862d32b/assets", async (c) => {
   try {
     const assets = await kv.getByPrefix("asset:");
     
-    // Get query parameters for filtering
     const assetClass = c.req.query("assetClass");
     const location = c.req.query("location");
     const search = c.req.query("search")?.toLowerCase();
@@ -50,8 +140,10 @@ app.get("/make-server-8862d32b/assets", async (c) => {
         (a.assetTagging && a.assetTagging.toLowerCase().includes(search)) ||
         (a.description && a.description.toLowerCase().includes(search)) ||
         (a.assetClass && a.assetClass.toLowerCase().includes(search)) ||
+        (a.assetSubClass && a.assetSubClass.toLowerCase().includes(search)) ||
         (a.location && a.location.toLowerCase().includes(search)) ||
-        (a.vendorsSuppliers && a.vendorsSuppliers.toLowerCase().includes(search))
+        (a.serialNumber && a.serialNumber.toLowerCase().includes(search)) ||
+        (a.vendorSupplierNameAddress && a.vendorSupplierNameAddress.toLowerCase().includes(search))
       );
     }
     
@@ -62,7 +154,6 @@ app.get("/make-server-8862d32b/assets", async (c) => {
   }
 });
 
-// Get single asset by code (using wildcard to handle slashes in asset tagging)
 app.get("/make-server-8862d32b/assets/:code{.+}", async (c) => {
   try {
     const code = decodeURIComponent(c.req.param("code"));
@@ -79,29 +170,27 @@ app.get("/make-server-8862d32b/assets/:code{.+}", async (c) => {
   }
 });
 
-// Create new asset
 app.post("/make-server-8862d32b/assets", async (c) => {
   try {
     const body = await c.req.json();
-    const { assetTagging } = body;
+    const validation = validateAsset(body);
     
-    if (!assetTagging) {
-      return c.json({ error: "Asset tagging is required" }, 400);
+    if (!validation.valid) {
+      return c.json({ error: validation.errors.join(", ") }, 400);
     }
     
-    // Check if asset already exists
-    const existing = await kv.get(`asset:${assetTagging}`);
+    const existing = await kv.get(`asset:${validation.asset.assetTagging}`);
     if (existing) {
       return c.json({ error: "Asset tagging already exists" }, 400);
     }
     
     const asset = {
-      ...body,
+      ...validation.asset,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
     
-    await kv.set(`asset:${assetTagging}`, asset);
+    await kv.set(`asset:${asset.assetTagging}`, asset);
     
     return c.json({ asset, message: "Asset created successfully" });
   } catch (error) {
@@ -110,7 +199,6 @@ app.post("/make-server-8862d32b/assets", async (c) => {
   }
 });
 
-// Update existing asset (using wildcard to handle slashes in asset tagging)
 app.put("/make-server-8862d32b/assets/:code{.+}", async (c) => {
   try {
     const code = decodeURIComponent(c.req.param("code"));
@@ -121,10 +209,15 @@ app.put("/make-server-8862d32b/assets/:code{.+}", async (c) => {
       return c.json({ error: "Asset not found" }, 404);
     }
     
+    const validation = validateAsset({ ...body, assetTagging: code });
+    
+    if (!validation.valid) {
+      return c.json({ error: validation.errors.join(", ") }, 400);
+    }
+    
     const asset = {
-      ...existing,
-      ...body,
-      assetTagging: code, // Ensure asset tagging doesn't change
+      ...validation.asset,
+      assetTagging: code,
       createdAt: existing.createdAt,
       updatedAt: new Date().toISOString(),
     };
@@ -138,7 +231,6 @@ app.put("/make-server-8862d32b/assets/:code{.+}", async (c) => {
   }
 });
 
-// Delete asset (using wildcard to handle slashes in asset tagging)
 app.delete("/make-server-8862d32b/assets/:code{.+}", async (c) => {
   try {
     const code = decodeURIComponent(c.req.param("code"));
@@ -160,7 +252,6 @@ app.delete("/make-server-8862d32b/assets/:code{.+}", async (c) => {
   }
 });
 
-// Bulk import assets
 app.post("/make-server-8862d32b/assets/bulk-import", async (c) => {
   try {
     const body = await c.req.json();
@@ -178,19 +269,21 @@ app.post("/make-server-8862d32b/assets/bulk-import", async (c) => {
     
     for (const asset of assets) {
       try {
-        if (!asset.assetTagging) {
+        const validation = validateAsset(asset);
+        
+        if (!validation.valid) {
           results.failed++;
-          results.errors.push({ asset, error: "Missing asset tagging" });
+          results.errors.push({ asset, error: validation.errors.join(", ") });
           continue;
         }
         
         const assetData = {
-          ...asset,
+          ...validation.asset,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
         
-        await kv.set(`asset:${asset.assetTagging}`, assetData);
+        await kv.set(`asset:${assetData.assetTagging}`, assetData);
         results.success++;
       } catch (error) {
         results.failed++;
@@ -208,7 +301,6 @@ app.post("/make-server-8862d32b/assets/bulk-import", async (c) => {
   }
 });
 
-// Get dashboard statistics
 app.get("/make-server-8862d32b/dashboard/stats", async (c) => {
   try {
     const assets = await kv.getByPrefix("asset:");
@@ -222,30 +314,24 @@ app.get("/make-server-8862d32b/dashboard/stats", async (c) => {
       recentUpdates: [] as any[],
     };
     
-    // Calculate statistics
     assets.forEach((asset) => {
-      // Asset class counts
       if (asset.assetClass) {
         stats.byAssetClass[asset.assetClass] = (stats.byAssetClass[asset.assetClass] || 0) + 1;
       }
       
-      // Location counts
       if (asset.location) {
         stats.byLocation[asset.location] = (stats.byLocation[asset.location] || 0) + 1;
       }
       
-      // Total original cost
       if (asset.originalCost) {
         stats.totalOriginalCost += parseFloat(asset.originalCost) || 0;
       }
       
-      // Total WDV
-      if (asset.wdvMarch2022) {
-        stats.totalWDV += parseFloat(asset.wdvMarch2022) || 0;
+      if (asset.wdvAsMarch31) {
+        stats.totalWDV += parseFloat(asset.wdvAsMarch31) || 0;
       }
     });
     
-    // Get recent updates (last 5)
     stats.recentUpdates = assets
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
       .slice(0, 5);
