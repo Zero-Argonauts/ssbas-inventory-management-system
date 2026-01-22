@@ -397,6 +397,19 @@ export function AssetList() {
     }
   }, [filteredAssets]);
 
+  const formatExcelDate = (value?: string) => {
+    if (!value) return "N/A";
+  
+    // if it's an excel serial number like 44851
+    if (/^\d+$/.test(value)) {
+      const serial = Number(value);
+      const date = new Date((serial - 25569) * 86400 * 1000);
+      return date.toLocaleDateString("en-IN"); // or "en-US"
+    }
+  
+    return value; // already normal date string
+  };
+
   // Handle individual checkbox
   const handleSelectAsset = useCallback((assetTagging: string, checked: boolean) => {
     setSelectedAssets(prev => {
@@ -839,7 +852,7 @@ export function AssetList() {
                 </div>
                 <div>
                   <div className="text-sm text-muted-foreground">Date of Purchase</div>
-                  <div>{selectedAsset.dateOfPurchase || 'N/A'}</div>
+                  <div>{formatExcelDate(selectedAsset.dateOfPurchase)}</div>
                 </div>
                 <div>
                   <div className="text-sm text-muted-foreground">Tax Invoice</div>
