@@ -45,13 +45,21 @@ export function ExcelImport() {
     }
   };
 
+  const normalizeHeader = (text: string) =>
+    text
+      .toString()
+      .toLowerCase()
+      .trim()
+      .replace(/[^\w\s]/g, " ")
+      .replace(/\s+/g, " ");
+
   const normalizeAssetData = (row: any): any => {
     console.log("Excel row columns:", Object.keys(row));
     console.log("Excel row data:", row);
     
     const normalizedRow: any = {};
     for (const [key, value] of Object.entries(row)) {
-      const normalizedKey = key.toString().trim().toLowerCase().replace(/\s+/g, ' ');
+      const normalizedKey = normalizeHeader(key.toString());
       normalizedRow[normalizedKey] = value;
     }
     
@@ -121,6 +129,7 @@ export function ExcelImport() {
       ],
       taxInvoiceNo: [
         "tax invoice no. / (file no.)",
+        "tax invoice no. /( file no.)",
         "tax invoice no / (file no)",
         "tax invoice no.",
         "tax invoice no",
@@ -209,7 +218,7 @@ export function ExcelImport() {
 
     for (const [key, possibleNames] of Object.entries(mapping)) {
       for (const name of possibleNames) {
-        const normalizedName = name.toLowerCase().trim();
+        const normalizedName = normalizeHeader(name);
         if (normalizedRow[normalizedName] !== undefined && 
             normalizedRow[normalizedName] !== null && 
             normalizedRow[normalizedName] !== "") {

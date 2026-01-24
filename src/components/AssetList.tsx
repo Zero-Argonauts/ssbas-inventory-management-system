@@ -400,14 +400,25 @@ export function AssetList() {
   const formatExcelDate = (value?: string) => {
     if (!value) return "N/A";
   
-    // if it's an excel serial number like 44851
-    if (/^\d+$/.test(value)) {
-      const serial = Number(value);
-      const date = new Date((serial - 25569) * 86400 * 1000);
-      return date.toLocaleDateString("en-IN"); // or "en-US"
+    const v = value.trim();
+  
+    // ✅ If it's only year like "2022"
+    if (/^\d{4}$/.test(v)) return v;
+  
+    // ✅ If it's excel serial date like "44851"
+    if (/^\d+$/.test(v)) {
+      const serial = Number(v);
+  
+      // ✅ only convert if it looks like a real excel serial date
+      if (serial > 20000) {
+        const date = new Date((serial - 25569) * 86400 * 1000);
+        return date.toLocaleDateString("en-IN");
+      }
+  
+      return v; // small numbers shouldn't be converted
     }
   
-    return value; // already normal date string
+    return v;
   };
 
   // Handle individual checkbox
