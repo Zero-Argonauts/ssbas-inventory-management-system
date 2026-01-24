@@ -36,7 +36,7 @@ export function ExcelImport() {
       const workbook = XLSX.read(data, { type: "array" });
       const sheetName = workbook.SheetNames[0];
       const sheet = workbook.Sheets[sheetName];
-      const jsonData = XLSX.utils.sheet_to_json(sheet);
+      const jsonData = XLSX.utils.sheet_to_json(sheet, { raw: false });
 
       setPreview(jsonData.slice(0, 5));
     } catch (error) {
