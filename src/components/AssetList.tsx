@@ -15,7 +15,7 @@ import QRCodeLib from "qrcode";
 import { jsPDF } from "jspdf";
 import { groupAssetsIntoDesktopSets, type Asset as GroupAsset, type DesktopSet } from "../utils/assetGrouping";
 import { DesktopSetCard } from "./DesktopSetCard";
-import { List } from "react-window";    
+import { List } from "react-window";
 
 interface Asset {
   srNo?: string;
@@ -56,6 +56,8 @@ export function AssetList() {
   const [showGroupedView, setShowGroupedView] = useState(false); // Toggle for desktop set grouping
   const [sortField, setSortField] = useState<"assetTagging" | "originalCost">("assetTagging");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 25;
 
   useEffect(() => {
     fetchAssets();
@@ -139,6 +141,8 @@ export function AssetList() {
     }
   }, []);
 
+  const yieldToBrowser = () =>
+  new Promise<void>(resolve => setTimeout(resolve, 0));
 
   // Memoize unique values for filters
   const uniqueAssetClasses = useMemo(
@@ -196,6 +200,17 @@ export function AssetList() {
     return filtered;
   }, [assets, searchTerm, assetClassFilter, locationFilter, sortField, sortDirection]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, assetClassFilter, locationFilter]);
+
+  const totalPages = Math.ceil(filteredAssets.length / PAGE_SIZE);
+
+  const paginatedAssets = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filteredAssets.slice(start, start + PAGE_SIZE);
+  }, [filteredAssets, currentPage]);
+
   const handleDelete = useCallback(async () => {
     if (!selectedAsset) return;
 
@@ -230,13 +245,13 @@ export function AssetList() {
 
   const handleBulkDelete = useCallback(async () => {
     if (selectedAssets.length === 0) return;
-  
+
     try {
       // 🔴 delete from backend
       await Promise.all(
         selectedAssets.map(async (assetTagging) => {
           const encoded = encodeURIComponent(assetTagging);
-  
+
           const response = await fetch(
             `https://${projectId}.supabase.co/functions/v1/make-server-8862d32b/assets/${encoded}`,
             {
@@ -246,26 +261,26 @@ export function AssetList() {
               },
             }
           );
-  
+
           if (!response.ok) {
             const err = await response.json().catch(() => ({}));
             throw new Error(err.error || "Failed to delete asset");
           }
         })
       );
-  
+
       // 🟢 FAST UI UPDATE (NO REFETCH)
       setAssets(prev =>
         prev.filter(asset => !selectedAssets.includes(asset.assetTagging))
       );
-  
+
       // 🟢 reset UI state
       setSelectedAssets([]);
       setAssetClassFilter("all");
       setLocationFilter("all");
       setSearchTerm("");
       setBulkDeleteDialogOpen(false);
-  
+
       toast.success(`Deleted ${selectedAssets.length} assets successfully`);
     } catch (error) {
       console.error("Bulk delete failed:", error);
@@ -325,16 +340,53 @@ export function AssetList() {
     toast.success("Assets exported successfully");
   }, [filteredAssets]);
 
+  function createNewPdf(part: number) {
+    const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+    pdf.setFontSize(16);
+    pdf.text(`Asset QR Codes (Part ${part})`, 105, 15, { align: "center" });
+
+    pdf.setFontSize(10);
+    pdf.text(
+      `Generated on ${new Date().toLocaleDateString()}`,
+      105,
+      22,
+      { align: "center" }
+    );
+
+    return pdf;
+  }
+
+  function addPageNumbers(pdf: jsPDF) {
+    const totalPages = pdf.getNumberOfPages();
+
+    for (let i = 1; i <= totalPages; i++) {
+      pdf.setPage(i);
+      pdf.setFontSize(8);
+      pdf.text(
+        `Page ${i} of ${totalPages}`,
+        105,
+        287,
+        { align: "center" }
+      );
+    }
+  }
+
   const handleExportQRCodesPDF = useCallback(async () => {
+
+    const MAX_PAGES_PER_PDF = 50;
+    const ITEMS_PER_PAGE = 12; // 3 cols × 4 rows
+    const ITEMS_PER_PDF = MAX_PAGES_PER_PDF * ITEMS_PER_PAGE;
+
     try {
       toast.info("Generating QR codes PDF...");
-  
-      const pdf = new jsPDF({
-        orientation: "portrait",
-        unit: "mm",
-        format: "a4",
-      });
-  
+
+      // const pdf = new jsPDF({
+      //   orientation: "portrait",
+      //   unit: "mm",
+      //   format: "a4",
+      // });
+
       // PDF layout config
       const pageWidth = 210;
       const pageHeight = 297;
@@ -345,76 +397,72 @@ export function AssetList() {
       const cols = 3;
       const rows = 4;
       const perPage = cols * rows;
-  
-      const CHUNK_SIZE = 25; // 🔑 performance key
-  
-      // Title (first page)
-      pdf.setFontSize(16);
-      pdf.text("Asset QR Codes", pageWidth / 2, margin, { align: "center" });
-      pdf.setFontSize(10);
-      pdf.text(
-        `Generated on ${new Date().toLocaleDateString()}`,
-        pageWidth / 2,
-        margin + 6,
-        { align: "center" }
-      );
-  
+
+      const CHUNK_SIZE = 100; // 🔑 performance key
+
+      let pdfPart = 1;
       let currentIndex = 0;
-  
+      let pdf = createNewPdf(pdfPart);
+
+      // Title (first page)
+      // pdf.setFontSize(16);
+      // pdf.text("Asset QR Codes", pageWidth / 2, margin, { align: "center" });
+      // pdf.setFontSize(10);
+      // pdf.text(
+      //   `Generated on ${new Date().toLocaleDateString()}`,
+      //   pageWidth / 2,
+      //   margin + 6,
+      //   { align: "center" }
+      // );
+
+      
+
       // 🔁 Process assets in chunks
       for (let start = 0; start < filteredAssets.length; start += CHUNK_SIZE) {
         const chunk = filteredAssets.slice(start, start + CHUNK_SIZE);
-  
-        // Generate QR codes for this chunk only
+
         const qrCodes = await Promise.all(
           chunk.map(asset =>
-            QRCodeLib.toDataURL(asset.assetTagging, {
-              width: 400,
-              margin: 1,
-            })
+            QRCodeLib.toDataURL(asset.assetTagging, { width: 400, margin: 1 })
           )
         );
-  
+
         for (let i = 0; i < chunk.length; i++) {
+          // 🔴 If current PDF is full → save & start new
+          if (currentIndex > 0 && currentIndex % ITEMS_PER_PDF === 0) {
+            addPageNumbers(pdf);
+            pdf.save(`asset_qr_codes_${new Date().toISOString().split("T")[0]}_part_${pdfPart}.pdf`);
+
+            await yieldToBrowser();
+
+            pdfPart++;
+            pdf = createNewPdf(pdfPart);
+            currentIndex = 0;
+          }
+
           const asset = chunk[i];
           const qrDataUrl = qrCodes[i];
-  
-          const indexInPage = currentIndex % perPage;
-  
-          // New page when needed
-          if (currentIndex > 0 && indexInPage === 0) {
+
+          const indexInPage = currentIndex % ITEMS_PER_PAGE;
+
+          if (indexInPage === 0 && currentIndex !== 0) {
             pdf.addPage();
           }
-  
-          const row = Math.floor(indexInPage / cols);
-          const col = indexInPage % cols;
-  
-          const x = margin + col * cellWidth;
-          const y = margin + 15 + row * cellHeight;
-  
-          // QR image
-          pdf.addImage(
-            qrDataUrl,
-            "PNG",
-            x + (cellWidth - qrSize) / 2,
-            y,
-            qrSize,
-            qrSize
-          );
-  
-          // Label
+
+          const row = Math.floor(indexInPage / 3);
+          const col = indexInPage % 3;
+
+          const x = 15 + col * 60;
+          const y = 30 + row * 60;
+
+          pdf.addImage(qrDataUrl, "PNG", x + 10, y, 40, 40);
           pdf.setFontSize(9);
-          pdf.text(
-            asset.assetTagging,
-            x + cellWidth / 2,
-            y + qrSize + 5,
-            { align: "center" }
-          );
-  
+          pdf.text(asset.assetTagging, x + 30, y + 47, { align: "center" });
+
           currentIndex++;
         }
       }
-  
+
       // Page numbers
       const totalPages = pdf.getNumberOfPages();
       for (let i = 1; i <= totalPages; i++) {
@@ -427,8 +475,12 @@ export function AssetList() {
           { align: "center" }
         );
       }
-  
-      pdf.save(`asset_qr_codes_${new Date().toISOString().split("T")[0]}.pdf`);
+
+      addPageNumbers(pdf);
+      pdf.save(`asset_qr_codes_${new Date().toISOString().split("T")[0]}_part_${pdfPart}.pdf`);
+
+      await yieldToBrowser();
+
       toast.success(`Generated PDF with ${filteredAssets.length} QR codes`);
     } catch (error) {
       console.error("QR PDF generation failed:", error);
@@ -644,6 +696,7 @@ export function AssetList() {
           {showGroupedView && desktopSets.length > 0 ? (
             <div className="space-y-3 sm:space-y-4 lg:space-y-3">
               {/* Desktop Sets */}
+
               <div>
                 <h3 className="text-sm font-medium mb-2 sm:mb-3 lg:mb-2">Desktop Sets ({desktopSets.length})</h3>
                 {/* Full width layout for desktop sets */}
@@ -818,7 +871,7 @@ export function AssetList() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredAssets.map((asset) => (
+                    paginatedAssets.map((asset) => (
                       <TableRow key={asset.assetTagging}>
                         <TableCell className="px-2 sm:px-4 lg:px-3">
                           <Checkbox
@@ -890,6 +943,54 @@ export function AssetList() {
           )}
         </CardContent>
       </Card>
+
+      {totalPages > 1 && (
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-4">
+          <div className="text-xs sm:text-sm text-muted-foreground">
+            Page {currentPage} of {totalPages}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                setCurrentPage(p => (p === 1 ? totalPages : p - 1))
+              }
+            >
+              Previous
+            </Button>
+
+            <div className="flex items-center gap-1 text-xs sm:text-sm">
+              <span>Go to</span>
+              <Input
+                type="number"
+                min={1}
+                max={totalPages}
+                value={currentPage}
+                onChange={(e) => {
+                  const value = Number(e.target.value);
+                  if (Number.isNaN(value)) return;
+                  if (value < 1) setCurrentPage(1);
+                  else if (value > totalPages) setCurrentPage(totalPages);
+                  else setCurrentPage(value);
+                }}
+                className="w-16 h-8 text-center"
+              />
+            </div>
+
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                setCurrentPage(p => (p === totalPages ? 1 : p + 1))
+              }
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* View Dialog */}
       <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
