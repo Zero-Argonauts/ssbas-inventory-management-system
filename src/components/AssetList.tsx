@@ -15,6 +15,7 @@ import QRCodeLib from "qrcode";
 import { jsPDF } from "jspdf";
 import { groupAssetsIntoDesktopSets, type Asset as GroupAsset, type DesktopSet } from "../utils/assetGrouping";
 import { DesktopSetCard } from "./DesktopSetCard";
+import { List } from "react-window";    
 
 interface Asset {
   srNo?: string;
@@ -62,21 +63,74 @@ export function AssetList() {
 
   const fetchAssets = useCallback(async () => {
     try {
-      const response = await fetch(
-        `https://${projectId}.supabase.co/functions/v1/make-server-8862d32b/assets`,
-        {
-          headers: {
-            Authorization: `Bearer ${publicAnonKey}`,
-          },
-        }
-      );
+      let allAssets: any[] = [];
+      let offset = 0;
+      const limit = 1000;
+      let total = 0;
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch assets");
+      while (true) {
+        const response = await fetch(
+          `https://${projectId}.supabase.co/functions/v1/make-server-8862d32b/assets?limit=${limit}&offset=${offset}`,
+          {
+            headers: {
+              Authorization: `Bearer ${publicAnonKey}`,
+            },
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch assets");
+        }
+
+        const data = await response.json();
+
+        total = data.total;
+
+        const mapped = data.assets.map((a: any) => ({
+          srNo: a.sr_no,
+
+          assetTagging: a.asset_tagging,
+          assetClass: a.asset_class,
+          assetSubClass: a.asset_sub_class,
+          description: a.description,
+
+          serialNumber: a.serial_number,
+          location: a.location,
+          dateOfPurchase: a.date_of_purchase,
+
+          taxInvoiceNo: a.tax_invoice_no,
+          vendorSupplierNameAddress: a.vendor_supplier_name_address,
+
+          originalCost: a.original_cost !== null ? String(a.original_cost) : "",
+          depreciationRate: a.depreciation_rate !== null ? String(a.depreciation_rate) : "",
+          wdvAsMarch31: a.wdv_as_march_31 !== null ? String(a.wdv_as_march_31) : "",
+
+          transferredDisposalDetails: a.transferred_disposal_details,
+          valuationAtTransferDisposal:
+            a.valuation_at_transfer_disposal !== null
+              ? String(a.valuation_at_transfer_disposal)
+              : "",
+
+          scrapValueRealised:
+            a.scrap_value_realised !== null
+              ? String(a.scrap_value_realised)
+              : "",
+
+          remarksAuthorisedSignatory: a.remarks_authorised_signatory,
+
+          createdAt: a.created_at,
+          updatedAt: a.updated_at,
+        }));
+
+
+        allAssets.push(...mapped);
+
+        if (allAssets.length >= total) break;
+
+        offset += limit;
       }
 
-      const data = await response.json();
-      setAssets(data.assets);
+      setAssets(allAssets);
     } catch (error) {
       console.error("Error fetching assets:", error);
       toast.error("Failed to load assets");
@@ -84,6 +138,7 @@ export function AssetList() {
       setLoading(false);
     }
   }, []);
+
 
   // Memoize unique values for filters
   const uniqueAssetClasses = useMemo(
@@ -125,13 +180,13 @@ export function AssetList() {
       if (sortField === "assetTagging") {
         const aValue = a.assetTagging || "";
         const bValue = b.assetTagging || "";
-        return sortDirection === "asc" 
+        return sortDirection === "asc"
           ? aValue.localeCompare(bValue)
           : bValue.localeCompare(aValue);
       } else if (sortField === "originalCost") {
         const aValue = parseFloat(a.originalCost || "0");
         const bValue = parseFloat(b.originalCost || "0");
-        return sortDirection === "asc" 
+        return sortDirection === "asc"
           ? aValue - bValue
           : bValue - aValue;
       }
@@ -147,7 +202,7 @@ export function AssetList() {
     try {
       // URL-encode the asset tagging to handle special characters like slashes
       const encodedAssetTagging = encodeURIComponent(selectedAsset.assetTagging);
-      
+
       const response = await fetch(
         `https://${projectId}.supabase.co/functions/v1/make-server-8862d32b/assets/${encodedAssetTagging}`,
         {
@@ -175,38 +230,50 @@ export function AssetList() {
 
   const handleBulkDelete = useCallback(async () => {
     if (selectedAssets.length === 0) return;
-
+  
     try {
-      const deletePromises = selectedAssets.map(async (assetTagging) => {
-        // URL-encode the asset tagging to handle special characters like slashes
-        const encodedAssetTagging = encodeURIComponent(assetTagging);
-        
-        const response = await fetch(
-          `https://${projectId}.supabase.co/functions/v1/make-server-8862d32b/assets/${encodedAssetTagging}`,
-          {
-            method: "DELETE",
-            headers: {
-              Authorization: `Bearer ${publicAnonKey}`,
-            },
+      // 🔴 delete from backend
+      await Promise.all(
+        selectedAssets.map(async (assetTagging) => {
+          const encoded = encodeURIComponent(assetTagging);
+  
+          const response = await fetch(
+            `https://${projectId}.supabase.co/functions/v1/make-server-8862d32b/assets/${encoded}`,
+            {
+              method: "DELETE",
+              headers: {
+                Authorization: `Bearer ${publicAnonKey}`,
+              },
+            }
+          );
+  
+          if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.error || "Failed to delete asset");
           }
-        );
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.error || "Failed to delete asset");
-        }
-      });
-
-      await Promise.all(deletePromises);
-      toast.success("Selected assets deleted successfully");
-      fetchAssets();
-      setBulkDeleteDialogOpen(false);
+        })
+      );
+  
+      // 🟢 FAST UI UPDATE (NO REFETCH)
+      setAssets(prev =>
+        prev.filter(asset => !selectedAssets.includes(asset.assetTagging))
+      );
+  
+      // 🟢 reset UI state
       setSelectedAssets([]);
+      setAssetClassFilter("all");
+      setLocationFilter("all");
+      setSearchTerm("");
+      setBulkDeleteDialogOpen(false);
+  
+      toast.success(`Deleted ${selectedAssets.length} assets successfully`);
     } catch (error) {
-      console.error("Error deleting assets:", error);
-      toast.error((error as Error).message || "Failed to delete assets");
+      console.error("Bulk delete failed:", error);
+      toast.error(
+        error instanceof Error ? error.message : "Failed to delete assets"
+      );
     }
-  }, [selectedAssets, fetchAssets]);
+  }, [selectedAssets, projectId, publicAnonKey]);
 
   const handleExport = useCallback(() => {
     const csvContent = [
@@ -261,28 +328,27 @@ export function AssetList() {
   const handleExportQRCodesPDF = useCallback(async () => {
     try {
       toast.info("Generating QR codes PDF...");
-      
+  
       const pdf = new jsPDF({
         orientation: "portrait",
         unit: "mm",
         format: "a4",
       });
-
-      // PDF settings
-      const pageWidth = 210; // A4 width in mm
-      const pageHeight = 297; // A4 height in mm
+  
+      // PDF layout config
+      const pageWidth = 210;
+      const pageHeight = 297;
       const margin = 15;
-      const qrSize = 40; // QR code size in mm
-      const labelHeight = 12; // Height for label text
-      const cellWidth = 60; // Width of each cell (QR + label)
-      const cellHeight = 60; // Height of each cell (QR + label + spacing)
-      const cols = 3; // 3 QR codes per row
-      const rows = 4; // 4 rows per page
-      const perPage = cols * rows; // 12 QR codes per page
-
-      let currentPage = 0;
-      
-      // Add title to first page
+      const qrSize = 40;
+      const cellWidth = 60;
+      const cellHeight = 60;
+      const cols = 3;
+      const rows = 4;
+      const perPage = cols * rows;
+  
+      const CHUNK_SIZE = 25; // 🔑 performance key
+  
+      // Title (first page)
       pdf.setFontSize(16);
       pdf.text("Asset QR Codes", pageWidth / 2, margin, { align: "center" });
       pdf.setFontSize(10);
@@ -292,57 +358,64 @@ export function AssetList() {
         margin + 6,
         { align: "center" }
       );
-
-      for (let i = 0; i < filteredAssets.length; i++) {
-        const asset = filteredAssets[i];
-        const indexInPage = i % perPage;
-
-        // Add new page if needed (but not for the first item)
-        if (i > 0 && indexInPage === 0) {
-          pdf.addPage();
-          currentPage++;
-        }
-
-        // Calculate position
-        const row = Math.floor(indexInPage / cols);
-        const col = indexInPage % cols;
-        const x = margin + col * cellWidth;
-        const y = margin + 15 + row * cellHeight; // 15mm offset for title on first page
-
-        // Generate QR code
-        const qrDataUrl = await QRCodeLib.toDataURL(asset.assetTagging, {
-          width: 400,
-          margin: 1,
-        });
-
-        // Add QR code image
-        pdf.addImage(qrDataUrl, "PNG", x + (cellWidth - qrSize) / 2, y, qrSize, qrSize);
-
-        // Add asset tagging label below QR code
-        pdf.setFontSize(9);
-        pdf.text(
-          asset.assetTagging,
-          x + cellWidth / 2,
-          y + qrSize + 5,
-          { align: "center" }
+  
+      let currentIndex = 0;
+  
+      // 🔁 Process assets in chunks
+      for (let start = 0; start < filteredAssets.length; start += CHUNK_SIZE) {
+        const chunk = filteredAssets.slice(start, start + CHUNK_SIZE);
+  
+        // Generate QR codes for this chunk only
+        const qrCodes = await Promise.all(
+          chunk.map(asset =>
+            QRCodeLib.toDataURL(asset.assetTagging, {
+              width: 400,
+              margin: 1,
+            })
+          )
         );
-
-        // Add description/sub-class if available (smaller text)
-        if (asset.description || asset.assetSubClass) {
-          pdf.setFontSize(7);
-          const label = asset.description || asset.assetSubClass;
-          const maxWidth = cellWidth - 4;
-          const lines = pdf.splitTextToSize(label, maxWidth);
+  
+        for (let i = 0; i < chunk.length; i++) {
+          const asset = chunk[i];
+          const qrDataUrl = qrCodes[i];
+  
+          const indexInPage = currentIndex % perPage;
+  
+          // New page when needed
+          if (currentIndex > 0 && indexInPage === 0) {
+            pdf.addPage();
+          }
+  
+          const row = Math.floor(indexInPage / cols);
+          const col = indexInPage % cols;
+  
+          const x = margin + col * cellWidth;
+          const y = margin + 15 + row * cellHeight;
+  
+          // QR image
+          pdf.addImage(
+            qrDataUrl,
+            "PNG",
+            x + (cellWidth - qrSize) / 2,
+            y,
+            qrSize,
+            qrSize
+          );
+  
+          // Label
+          pdf.setFontSize(9);
           pdf.text(
-            lines[0], // Just show first line to avoid overflow
+            asset.assetTagging,
             x + cellWidth / 2,
-            y + qrSize + 9,
+            y + qrSize + 5,
             { align: "center" }
           );
+  
+          currentIndex++;
         }
       }
-
-      // Add page numbers
+  
+      // Page numbers
       const totalPages = pdf.getNumberOfPages();
       for (let i = 1; i <= totalPages; i++) {
         pdf.setPage(i);
@@ -354,12 +427,11 @@ export function AssetList() {
           { align: "center" }
         );
       }
-
-      // Save the PDF
+  
       pdf.save(`asset_qr_codes_${new Date().toISOString().split("T")[0]}.pdf`);
       toast.success(`Generated PDF with ${filteredAssets.length} QR codes`);
     } catch (error) {
-      console.error("Error generating QR codes PDF:", error);
+      console.error("QR PDF generation failed:", error);
       toast.error("Failed to generate QR codes PDF");
     }
   }, [filteredAssets]);
@@ -399,25 +471,25 @@ export function AssetList() {
 
   const formatExcelDate = (value?: string) => {
     if (!value) return "N/A";
-  
+
     const v = value.trim();
-  
+
     // ✅ If it's only year like "2022"
     if (/^\d{4}$/.test(v)) return v;
-  
+
     // ✅ If it's excel serial date like "44851"
     if (/^\d+$/.test(v)) {
       const serial = Number(v);
-  
+
       // ✅ only convert if it looks like a real excel serial date
       if (serial > 20000) {
         const date = new Date((serial - 25569) * 86400 * 1000);
         return date.toLocaleDateString("en-IN");
       }
-  
+
       return v; // small numbers shouldn't be converted
     }
-  
+
     return v;
   };
 
@@ -700,7 +772,7 @@ export function AssetList() {
                         className="h-3 w-3 sm:h-4 sm:w-4"
                       />
                     </TableHead>
-                    <TableHead 
+                    <TableHead
                       className="min-w-[100px] px-2 sm:px-4 lg:px-3 text-xs sm:text-sm cursor-pointer hover:bg-muted/50"
                       onClick={() => handleSort("assetTagging")}
                     >
@@ -719,7 +791,7 @@ export function AssetList() {
                     <TableHead className="min-w-[80px] px-2 sm:px-4 lg:px-3 text-xs sm:text-sm hidden lg:table-cell">Sub Class</TableHead>
                     <TableHead className="min-w-[120px] px-2 sm:px-4 lg:px-3 text-xs sm:text-sm hidden sm:table-cell">Description</TableHead>
                     <TableHead className="min-w-[100px] px-2 sm:px-4 lg:px-3 text-xs sm:text-sm hidden lg:table-cell">Location</TableHead>
-                    <TableHead 
+                    <TableHead
                       className="min-w-[80px] px-2 sm:px-4 lg:px-3 text-xs sm:text-sm hidden xl:table-cell cursor-pointer hover:bg-muted/50"
                       onClick={() => handleSort("originalCost")}
                     >

@@ -24,7 +24,7 @@ export function DesktopSetCard({
   onViewQRCode,
 }: DesktopSetCardProps) {
   const { components, displayName, location, totalCost, completeness, setId } = desktopSet;
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const getCompletenessColor = (percentage: number) => {
     if (percentage === 100) return "text-green-600 dark:text-green-400";

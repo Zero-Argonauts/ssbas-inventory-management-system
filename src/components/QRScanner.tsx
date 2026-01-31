@@ -37,6 +37,8 @@ export function QRScanner() {
   const [loading, setLoading] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const scannedOnceRef = useRef(false);
+
 
   const fetchAsset = async (code: string) => {
     setLoading(true);
@@ -62,7 +64,36 @@ export function QRScanner() {
       }
 
       const data = await response.json();
-      setAsset(data.asset);
+
+      const a = data.asset;
+
+      setAsset({
+        srNo: a.sr_no,
+        assetTagging: a.asset_tagging,
+        assetClass: a.asset_class,
+        assetSubClass: a.asset_sub_class,
+        description: a.description,
+        serialNumber: a.serial_number,
+        location: a.location,
+        dateOfPurchase: a.date_of_purchase,
+        taxInvoiceNo: a.tax_invoice_no,
+        vendorSupplierNameAddress: a.vendor_supplier_name_address,
+        originalCost: a.original_cost !== null ? String(a.original_cost) : "",
+        depreciationRate: a.depreciation_rate !== null ? String(a.depreciation_rate) : "",
+        wdvAsMarch31: a.wdv_as_march_31 !== null ? String(a.wdv_as_march_31) : "",
+        transferredDisposalDetails: a.transferred_disposal_details,
+        valuationAtTransferDisposal:
+          a.valuation_at_transfer_disposal !== null
+            ? String(a.valuation_at_transfer_disposal)
+            : "",
+        scrapValueRealised:
+          a.scrap_value_realised !== null
+            ? String(a.scrap_value_realised)
+            : "",
+        remarksAuthorisedSignatory: a.remarks_authorised_signatory,
+        createdAt: a.created_at,
+        updatedAt: a.updated_at,
+      });
       toast.success("Asset found!");
     } catch (error) {
       console.error("Error fetching asset:", error);
@@ -73,11 +104,14 @@ export function QRScanner() {
   };
 
   const startScanning = async () => {
+    scannedOnceRef.current = false;
+  
     try {
       setCameraError(null);
+  
       const html5QrCode = new Html5Qrcode("qr-reader");
       scannerRef.current = html5QrCode;
-
+  
       await html5QrCode.start(
         { facingMode: "environment" },
         {
@@ -85,14 +119,15 @@ export function QRScanner() {
           qrbox: { width: 250, height: 250 },
         },
         (decodedText) => {
-          fetchAsset(decodedText);
+          if (scannedOnceRef.current) return;
+  
+          scannedOnceRef.current = true;
+          fetchAsset(decodedText.trim());
           stopScanning();
         },
-        (errorMessage) => {
-          
-        }
+        () => {}
       );
-
+  
       setScanning(true);
     } catch (error: any) {
       console.error("Error starting scanner:", error);
@@ -100,6 +135,7 @@ export function QRScanner() {
       toast.error("Failed to start camera. Please check permissions.");
     }
   };
+  
 
   const stopScanning = async () => {
     if (scannerRef.current) {
