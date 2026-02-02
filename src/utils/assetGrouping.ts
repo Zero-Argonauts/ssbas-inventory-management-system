@@ -2,13 +2,12 @@
 
 export interface PeripheralInfo {
   type:
-  | 'Mo' | 'Mn' | 'Mcn'
-  | 'Ko' | 'Kn' | 'Kcn'
-  | 'Ro' | 'Rn' | 'Rcn'
-  | 'Co' | 'Cn' | 'Ccn'
-  | null; // Monitor, Keyboard, Mouse, CPU
-  financialYear: string | null; // e.g., "2025-26"
-  setId: string | null; // e.g., "T01"
+  | 'Mo' | 'Mn' | 'Mcn' | 'MCn'
+  | 'Ko' | 'Kn' | 'Kcn' | 'KCn'
+  | 'Ro' | 'Rn' | 'Rcn' | 'RCn'
+  | 'Co' | 'Cn' | 'Ccn' | 'CCn'
+  | null;
+  setId: string | null;
   isPeripheral: boolean;
 }
 
@@ -59,26 +58,22 @@ export interface DesktopSet {
 export function parseAssetTag(assetTagging: string): PeripheralInfo {
   const normalizedTag = assetTagging.trim();
 
-  // Regex pattern for SSBAS/{Type}/YYYY-YY/TXX
   const pattern =
-    /^SSBAS\/(Mo|Mn|Mcn|Ko|Kn|Kcn|Ro|Rn|Rcn|Co|Cn|Ccn)\/(\d{4}-\d{2})\/(T\d+)$/i;
-
+    /^SSBAS\/(Mo|Mn|Mcn|MCn|Ko|Kn|Kcn|KCn|Ro|Rn|Rcn|RCn|Co|Cn|Ccn|CCn)\/\d{4}-\d{2}\/(T\d+)$/i
 
   const match = normalizedTag.match(pattern);
 
   if (!match) {
     return {
       type: null,
-      financialYear: null,
       setId: null,
       isPeripheral: false,
     };
   }
 
   return {
-    type: match[1] as 'Mo' | 'Ko' | 'Ro' | 'Co',
-    financialYear: match[2],
-    setId: match[3],
+    type: match[1] as PeripheralInfo['type'],
+    setId: match[2],
     isPeripheral: true,
   };
 }
@@ -108,8 +103,8 @@ export function groupAssetsIntoDesktopSets(assets: Asset[]): {
 
   peripheralAssets.forEach((asset) => {
     const info = parseAssetTag(asset.assetTagging);
-    if (info.isPeripheral && info.setId && info.financialYear) {
-      const key = `${info.financialYear}-${info.setId}`;
+    if (info.isPeripheral && info.setId) {
+      const key = info.setId;
       if (!setsMap.has(key)) {
         setsMap.set(key, []);
       }
@@ -131,7 +126,7 @@ export function groupAssetsIntoDesktopSets(assets: Asset[]): {
     const set: DesktopSet = {
       setId,
       financialYear,
-      displayName: `Desktop Set ${setNumber} (${financialYear})`,
+      displayName: `Desktop Set ${setNumber}`,
       components: {},
       allAssets: components,
       completeness: 0,
@@ -142,8 +137,12 @@ export function groupAssetsIntoDesktopSets(assets: Asset[]): {
     // Organize components by type
     components.forEach((asset) => {
       const info = parseAssetTag(asset.assetTagging);
-      if (info.type) {
-        const typeKey = getComponentKey(info.type);
+      if (!info.type) return;
+
+      const typeKey = getComponentKey(info.type);
+
+      // prevent overwrite
+      if (!set.components[typeKey]) {
         set.components[typeKey] = asset;
       }
     });
@@ -192,31 +191,35 @@ export function groupAssetsIntoDesktopSets(assets: Asset[]): {
  */
 function getComponentKey(
   type:
-    | 'Mo' | 'Mn' | 'Mcn'
-    | 'Ko' | 'Kn' | 'Kcn'
-    | 'Ro' | 'Rn' | 'Rcn'
-    | 'Co' | 'Cn' | 'Ccn'
+    | 'Mo' | 'Mn' | 'Mcn' | 'MCn'
+    | 'Ko' | 'Kn' | 'Kcn' | 'KCn'
+    | 'Ro' | 'Rn' | 'Rcn' | 'RCn'
+    | 'Co' | 'Cn' | 'Ccn' | 'CCn'
 ): keyof DesktopSet['components'] {
   const mapping: Record<string, keyof DesktopSet['components']> = {
     // Monitor
     Mo: 'monitor',
     Mn: 'monitor',
     Mcn: 'monitor',
+    MCn: 'monitor',
 
     // Keyboard
     Ko: 'keyboard',
     Kn: 'keyboard',
     Kcn: 'keyboard',
+    KCn: 'keyboard',
 
     // Mouse
     Ro: 'mouse',
     Rn: 'mouse',
     Rcn: 'mouse',
+    RCn: 'mouse',
 
     // CPU
     Co: 'cpu',
     Cn: 'cpu',
     Ccn: 'cpu',
+    CCn: 'cpu',
   };
 
   return mapping[type];
@@ -266,8 +269,8 @@ export function isDesktopPeripheral(assetTagging: string): boolean {
  */
 export function getSetIdentifier(assetTagging: string): string | null {
   const info = parseAssetTag(assetTagging);
-  if (!info.isPeripheral || !info.setId || !info.financialYear) {
+  if (!info.isPeripheral || !info.setId) {
     return null;
   }
-  return `${info.financialYear}-${info.setId}`;
+  return info.setId;
 }

@@ -15,7 +15,6 @@ import QRCodeLib from "qrcode";
 import { jsPDF } from "jspdf";
 import { groupAssetsIntoDesktopSets, type Asset as GroupAsset, type DesktopSet } from "../utils/assetGrouping";
 import { DesktopSetCard } from "./DesktopSetCard";
-import { List } from "react-window";
 
 interface Asset {
   srNo?: string;
